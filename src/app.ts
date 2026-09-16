@@ -11,6 +11,11 @@ import activityLevelsRoutes from "./modules/activityLevels/activityLevels.route"
 import goalsRoutes from "./modules/goals/goals.route";
 import categoriesRoutes from "./modules/categories/categories.route";
 import cuisinesRoutes from "./modules/cuisines/cuisines.route";
+import unitsRoutes from "./modules/units/units.route";
+import ingredientsRoutes from "./modules/ingredients/ingredients.route";
+import generalMealTypesRoutes from "./modules/generalMealTypes/generalMealTypes.route";
+import recipesRoutes from "./modules/recipes/recipes.route";
+import mealsRoutes from "./modules/meals/meals.route";
 
 const API_PREFIX = "/api/v1";
 
@@ -38,6 +43,11 @@ export function buildApp(options: FastifyServerOptions = {}): FastifyInstance {
   app.register(goalsRoutes, { prefix: `${API_PREFIX}/goals` });
   app.register(categoriesRoutes, { prefix: `${API_PREFIX}/categories` });
   app.register(cuisinesRoutes, { prefix: `${API_PREFIX}/cuisines` });
+  app.register(unitsRoutes, { prefix: `${API_PREFIX}/units` });
+  app.register(ingredientsRoutes, { prefix: `${API_PREFIX}/ingredients` });
+  app.register(generalMealTypesRoutes, { prefix: `${API_PREFIX}/general-meal-types` });
+  app.register(recipesRoutes, { prefix: `${API_PREFIX}/recipes` });
+  app.register(mealsRoutes, { prefix: `${API_PREFIX}/meals` });
 
   return app;
 }

@@ -2,8 +2,9 @@
 //
 // NOTE ON SCOPE: this file is written in full up front (Day 2) so that later
 // days (3-4) only ADD fields/relations via new migrations instead of
-// fragmenting the modeling decisions across days. Models that are only
-// stubs today (Unit, Recipe) are marked below with what Day 3 will add.
+// fragmenting the modeling decisions across days. Day 3 fleshed out Recipe
+// (was id/name only) and added the RecipeIngredient / IngredientSubstitute
+// join models.
 
 generator client {
   provider = "prisma-client-js"
@@ -135,7 +136,8 @@ model Unit {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  ingredients Ingredient[]
+  ingredients       Ingredient[]
+  recipeIngredients RecipeIngredient[]
 
   @@map("units")
 }
@@ -169,6 +171,9 @@ model Ingredient {
   unitId String?
   unit   Unit?   @relation(fields: [unitId], references: [id])
 
+  recipeIngredients     RecipeIngredient[]
+  substituteFor         IngredientSubstitute[] @relation("SubstituteIngredient")
+
   @@map("ingredients")
 }
 
@@ -198,10 +203,6 @@ model GeneralMealType {
 
 // ---------------------------------------------------------------------------
 // Meals / Recipes
-//
-// Recipe is intentionally minimal today (id, name). Day 3 adds prepTime,
-// cookTime, difficulty, servings, macros, instructions and the
-// RecipeIngredient join model.
 // ---------------------------------------------------------------------------
 
 model Meal {
@@ -223,14 +224,68 @@ model Meal {
 }
 
 model Recipe {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  description  String
+  prepTime     Int
+  cookTime     Int
+  // "easy" | "medium" | "hard"
+  difficulty   String
+  servings     Int
+  calories     Float
+  protein      Float
+  carbs        Float
+  fat          Float
+  // Array of instruction step strings, e.g. ["Preheat oven...", "Mix..."]
+  instructions Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  meals Meal[] @relation("MealRecipes")
+  meals             Meal[]             @relation("MealRecipes")
+  recipeIngredients RecipeIngredient[]
 
   @@map("recipes")
+}
+
+// ---------------------------------------------------------------------------
+// Recipe ingredients (join between Recipe and Ingredient with per-recipe
+// amounts) and their optional substitutes.
+// ---------------------------------------------------------------------------
+
+model RecipeIngredient {
+  id          String   @id @default(uuid())
+  minAmount   Float
+  baseAmount  Float
+  maxAmount   Float
+  roundAmount Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipeId String
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id])
+
+  substitutes IngredientSubstitute[]
+
+  @@map("recipe_ingredients")
+}
+
+model IngredientSubstitute {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  recipeIngredientId String
+  recipeIngredient   RecipeIngredient @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
+
+  substituteIngredientId String
+  substituteIngredient   Ingredient @relation("SubstituteIngredient", fields: [substituteIngredientId], references: [id])
+
+  @@map("ingredient_substitutes")
 }
 
 // ---------------------------------------------------------------------------

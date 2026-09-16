@@ -2,11 +2,23 @@
 
 A REST API for the Fitness Dashboard app, built with Fastify, TypeScript, Prisma and PostgreSQL.
 
-> **Status: Day 2 of a 3-day build.** This day covers project scaffolding, the
-> full database schema (all models needed through Day 4), JWT auth, and full
-> CRUD for four reference-data modules. Later days add the remaining
-> route modules (ingredients, meals, recipes, units, general meal types,
-> questions) on top of the schema that already exists here.
+> **Status: Day 3 of a 3-day build.** Day 2 covered project scaffolding, the
+> full database schema, JWT auth, and CRUD for four reference-data modules.
+> Day 3 fleshes out `Recipe` (was `id`/`name` only), adds the
+> `RecipeIngredient` / `IngredientSubstitute` join models, and adds CRUD
+> route modules for `Unit`, `Ingredient`, `GeneralMealType`, `Recipe` and
+> `Meal`.
+>
+> **Known issue carried over from Day 2:** the compiled server currently
+> fails to boot (`FST_ERR_PLUGIN_VERSION_MISMATCH`) because commit
+> `c2b706e` bumped `@fastify/jwt` to `^10.2.2` (to fix a real JWT
+> auth-bypass CVE) without bumping Fastify core past `^4.28.1`, and
+> `@fastify/jwt` >=9 requires Fastify 5. This blocks `npm start`, `npm test`,
+> and any HTTP-level smoke test — it is **not** something Day 3 introduced,
+> and downgrading `@fastify/jwt` back down would reintroduce the CVE Day 2
+> patched, so it was left for a dedicated Fastify-4→5 migration rather than
+> bundled into this day's feature work. Day 3 was verified at the
+> TypeScript/Prisma layer instead (see "Verification performed" below).
 
 ## Stack
 
@@ -34,6 +46,11 @@ src/
     goals/                   CRUD + toggle-state
     categories/              CRUD
     cuisines/                CRUD + toggle-state
+    units/                   CRUD
+    ingredients/             CRUD + list filters (categoryId, search)
+    generalMealTypes/        CRUD (routes at /general-meal-types)
+    recipes/                 CRUD + nested recipeIngredients (replace-all)
+    meals/                   CRUD + M2M wiring (replace-all)
   utils/
     hash.ts                  bcrypt password hashing + refresh-token hashing
     tokens.ts                 refresh token sign/verify (separate secret from access tokens)
@@ -159,12 +176,42 @@ All routes below live under `/api/v1` and require `Authorization: Bearer
 - **Categories** — `/categories`: same CRUD shape.
 - **Cuisines** — `/cuisines`: same CRUD shape, plus
   `PATCH /cuisines/:id/toggle-state`.
+- **Units** — `/units`: same CRUD shape (`GET /`, `GET /:id`, `POST /`,
+  `PUT /:id`, `DELETE /:id`). No `state` field.
+- **Ingredients** — `/ingredients`: same CRUD shape. `GET /` accepts optional
+  query params `categoryId` (exact match) and `search` (case-insensitive
+  `contains` on `name`), e.g. `GET /ingredients?categoryId=<uuid>&search=chicken`.
+  Responses include the related `category` and `unit`.
+- **General meal types** — `/general-meal-types`: same CRUD shape. **Design
+  decision:** the model is `GeneralMealType` but the route path uses the
+  shorter, REST-conventional `/general-meal-types` rather than
+  `/generalMealTypes` or `/meal-types`, for consistency with the kebab-case
+  used by every other route prefix in this API (`/activity-levels`, etc.).
+- **Recipes** — `/recipes`: same CRUD shape. `POST`/`PUT` accept a nested
+  `recipeIngredients: [{ ingredientId, unitId, minAmount, baseAmount,
+  maxAmount, roundAmount, substituteIngredientIds?: string[] }]` array.
+  `GET /recipes/:id` expands each `recipeIngredient` with its `ingredient`,
+  `unit`, and `substitutes` (each with its `substituteIngredient`). **Design
+  decision — replace-all semantics:** on `PUT`, if `recipeIngredients` is
+  present in the body (including `[]`), every existing `RecipeIngredient` row
+  for that recipe is deleted (cascading to its `IngredientSubstitute` rows)
+  and recreated from the payload inside one `prisma.$transaction`, rather
+  than diffing old vs. new rows. If `recipeIngredients` is omitted from the
+  body entirely, existing rows are left untouched. The same convention
+  applies to `Meal`'s M2M arrays below.
+- **Meals** — `/meals`: same CRUD shape. `POST`/`PUT` accept
+  `categoryIds: string[]`, `generalMealTypeIds: string[]`,
+  `recipeIds: string[]`; `POST` uses `connect`, `PUT` uses `set` (Prisma's
+  many-to-many replace-all) when the corresponding field is present in the
+  body, and leaves that relation untouched when the field is omitted.
+  `GET /meals/:id` expands `categories`, `generalMealTypes`, and `recipes`.
 
 **State convention**: every toggleable entity uses the string values
 `"active"` / `"inactive"` for its `state` field. `toggle-state` simply flips
 between the two. This convention is used consistently across `ActivityLevel`,
 `Goal`, `Category`(implicitly `mealSwapEnabled` is separate), `Cuisine`,
-`Ingredient`, `GeneralMealType`, and `Question` in the schema.
+`Ingredient`, `GeneralMealType`, and `Question` in the schema. `Unit`, `Recipe`,
+`RecipeIngredient` and `IngredientSubstitute` have no `state` field.
 
 ### Response / error shape
 
@@ -180,10 +227,9 @@ Errors are always `{ "error": { "message": string, "statusCode": number, "detail
 ## Database schema
 
 `prisma/schema.prisma` is written in full up front so migrations don't
-fragment across Days 2-4. Today's modules (auth, activity levels, goals,
-categories, cuisines) are fully wired up with routes. The following models
-exist in the schema and are seeded/migrated, but do not yet have route
-modules — those land in later days:
+fragment across Days 2-4. As of Day 3, every model has a route module wired
+up **except** `Question` (a generic survey/onboarding model, still schema-only
+— no CRUD module yet).
 
 - `Unit` — canonical unit model (`name`, `short`, `equivalentTo`, `unitType`,
   `system`). **Note:** the frontend currently has its own, separate
@@ -193,11 +239,30 @@ modules — those land in later days:
   consolidated into this single canonical model in a later phase. No further
   action is needed here now — this is purely a heads-up for that future
   consolidation work.
-- `Ingredient` — has nullable FKs to `Category` and `Unit` already in place.
-- `GeneralMealType`, `Meal`, `Recipe` (Recipe is intentionally minimal today —
-  just `id`/`name` — Day 3 adds `prepTime`, `cookTime`, `difficulty`,
-  `servings`, macros, `instructions` and a `RecipeIngredient` join model).
-- `Question` — generic survey/onboarding question model.
+- `Ingredient` — has nullable FKs to `Category` and `Unit`, plus (Day 3) a
+  `recipeIngredients` back-relation and a `substituteFor` back-relation (used
+  when this ingredient is listed as a substitute on someone else's recipe
+  line).
+- `GeneralMealType` — fully fielded, M2M with `Meal`.
+- `Meal` — fully fielded, M2M with `Category`, `GeneralMealType`, and
+  `Recipe`.
+- `Recipe` (Day 3) — fleshed out from the Day 2 `id`/`name` stub to add
+  `description`, `prepTime`, `cookTime`, `difficulty`, `servings`, `calories`,
+  `protein`, `carbs`, `fat`, `instructions` (JSON array of step strings), and
+  a `recipeIngredients` relation.
+- `RecipeIngredient` (Day 3, new) — join between `Recipe` and `Ingredient`
+  with per-recipe amounts (`minAmount`, `baseAmount`, `maxAmount`,
+  `roundAmount`) and a `unitId` FK. `onDelete: Cascade` from `Recipe`, so
+  deleting a recipe deletes its recipe-ingredient lines.
+- `IngredientSubstitute` (Day 3, new) — says "ingredient X can substitute for
+  the ingredient on this specific `RecipeIngredient` line" (no amount
+  fields). `onDelete: Cascade` from `RecipeIngredient`.
+- `Question` — generic survey/onboarding question model (schema-only, no
+  route module yet).
+
+Migration `20260916075732_day3_relations` (see `prisma/migrations/`) applies
+the above; it was a pure additive migration (new columns on `recipes`, two
+new tables) since `recipes` was still empty at the time.
 
 ## Scripts
 
@@ -215,6 +280,8 @@ modules — those land in later days:
 
 ## Verification performed during this build
 
+### Day 2
+
 - `npm run typecheck` and `npm run build` both pass cleanly.
 - A real PostgreSQL 16 instance was used (no Docker available in the build
   sandbox, so a user-owned local `postgres` cluster was initialized instead
@@ -228,3 +295,43 @@ modules — those land in later days:
   and bodies.
 - In an environment with Docker available, `docker compose up -d` followed by
   the steps in "Getting started" is the intended normal workflow.
+
+### Day 3
+
+- `npm run typecheck` and `npm run build` both pass cleanly with the new
+  `units`, `ingredients`, `generalMealTypes`, `recipes`, and `meals` modules
+  registered in `src/app.ts`.
+- Docker was still unavailable in this build sandbox; a reachable local
+  PostgreSQL 16 instance was found already running on the standard port
+  (`127.0.0.1:5432`, `postgres`/`postgres`), so a `fitness_dashboard`
+  database was created on it, `.env`'s `DATABASE_URL` was pointed at it, and
+  `prisma migrate dev --name day3_relations` was run for real against it —
+  it applied cleanly (see `prisma/migrations/20260916075732_day3_relations/`).
+  `prisma/seed.ts` was then re-run and seeded the new Day 3 rows (4 units, 5
+  ingredients linked to categories/units, 3 general meal types, 1 recipe with
+  3 recipe-ingredient lines including one substitute, 1 meal wiring
+  categories + a general meal type + the recipe) on top of the existing Day
+  2 seed data.
+- **HTTP-level `curl` verification was not possible**: the compiled server
+  (and `npm test`) currently fail to boot at all — this reproduces
+  identically on a clean `main` checkout before any Day 3 change, so it is a
+  pre-existing Day 2 regression, not something Day 3 introduced (see the
+  "Known issue" callout near the top of this file). Because of that, Day 3
+  was instead verified with an ad-hoc script run via `tsx` against the real,
+  migrated, seeded database using the actual `PrismaClient`, exercising the
+  same query/mutation shapes the new service modules use: `ingredients`
+  list filtering by `categoryId` and case-insensitive `search`; creating a
+  `Recipe` with two nested `recipeIngredients` (one with a
+  `substituteIngredient`) and confirming `GET`-style fetch-back expands
+  `ingredient`/`unit`/`substitutes.substituteIngredient`; the replace-all
+  update path (`recipeIngredient.deleteMany` + recreate in one
+  `$transaction`), confirming the old rows are gone, the old
+  `IngredientSubstitute` row cascaded away, and only the new row remains;
+  creating a `Meal` wired to two categories, a general meal type, and the
+  recipe, confirming the expanded response; and the M2M replace-all `set`
+  path on `Meal.categories`. All checks passed. This validates the Day 3
+  schema, migration, and query/mutation shapes end-to-end against Postgres,
+  but does **not** validate the zod request-validation layer or HTTP status
+  codes/error shapes for the new routes — those were reviewed by hand
+  against the same pattern used by the already-verified Day 2 modules
+  (`goals`, `cuisines`) instead.
