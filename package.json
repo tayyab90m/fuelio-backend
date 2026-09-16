@@ -1,7 +1,7 @@
 {
-  "name": "fitness-dashboard-backend",
+  "name": "fuelio-backend",
   "version": "0.1.0",
-  "description": "REST backend for the Fitness Dashboard (Fastify + TypeScript + Prisma + PostgreSQL)",
+  "description": "REST backend for Fuelio (Fastify + TypeScript + Prisma + PostgreSQL)",
   "main": "dist/server.js",
   "private": true,
   "type": "commonjs",
