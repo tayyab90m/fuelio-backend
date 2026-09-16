@@ -29,7 +29,14 @@ export function buildApp(options: FastifyServerOptions = {}): FastifyInstance {
   });
 
   // Core plugins
-  app.register(cors, { origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(",") });
+  app.register(cors, {
+    origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
+    // @fastify/cors defaults `methods` to "GET,HEAD,POST" only, which silently
+    // fails CORS preflight (and therefore every browser-originated PUT/PATCH/
+    // DELETE request - curl/Postman are unaffected since they don't preflight)
+    // for the many REST routes in this API that use those verbs.
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+  });
   app.register(sensible);
   app.register(errorHandlerPlugin);
   app.register(prismaPlugin);
