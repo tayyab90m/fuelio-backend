@@ -16,6 +16,7 @@ import ingredientsRoutes from "./modules/ingredients/ingredients.route";
 import generalMealTypesRoutes from "./modules/generalMealTypes/generalMealTypes.route";
 import recipesRoutes from "./modules/recipes/recipes.route";
 import mealsRoutes from "./modules/meals/meals.route";
+import questionsRoutes from "./modules/questions/questions.route";
 
 const API_PREFIX = "/api/v1";
 
@@ -48,6 +49,7 @@ export function buildApp(options: FastifyServerOptions = {}): FastifyInstance {
   app.register(generalMealTypesRoutes, { prefix: `${API_PREFIX}/general-meal-types` });
   app.register(recipesRoutes, { prefix: `${API_PREFIX}/recipes` });
   app.register(mealsRoutes, { prefix: `${API_PREFIX}/meals` });
+  app.register(questionsRoutes, { prefix: `${API_PREFIX}/questions` });
 
   return app;
 }
