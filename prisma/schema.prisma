@@ -1,0 +1,251 @@
+// Prisma schema for the Fitness Dashboard backend.
+//
+// NOTE ON SCOPE: this file is written in full up front (Day 2) so that later
+// days (3-4) only ADD fields/relations via new migrations instead of
+// fragmenting the modeling decisions across days. Models that are only
+// stubs today (Unit, Recipe) are marked below with what Day 3 will add.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth / users
+// ---------------------------------------------------------------------------
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String
+  name              String
+  phoneNumber       String?
+  // Only the HASH of the current refresh token is stored, never the raw
+  // token. Verifying a refresh token means hashing the incoming value and
+  // comparing it to this field.
+  refreshTokenHash  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Activity levels
+// ---------------------------------------------------------------------------
+
+model ActivityLevel {
+  id               String   @id @default(uuid())
+  name             String
+  multiplier       Float
+  description      String
+  stepRangeMin     Int
+  stepRangeMax     Int
+  workoutRangeMin  Int
+  workoutRangeMax  Int
+  state            String   @default("active")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("activity_levels")
+}
+
+// ---------------------------------------------------------------------------
+// Goals / Categories (many-to-many)
+// ---------------------------------------------------------------------------
+
+model Goal {
+  id                String     @id @default(uuid())
+  name              String
+  description       String
+  // Shape: { type: "increase" | "decrease" | "maintain", percentage: number }
+  calorieAdjustment Json
+  // Shape: { fats: number, carbs: number, protein: number }
+  macroRatios       Json
+  // "active" | "inactive"
+  state             String     @default("active")
+  categories        Category[] @relation("GoalCategories")
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@map("goals")
+}
+
+model Category {
+  id                         String     @id @default(uuid())
+  name                       String
+  description                String
+  sortingPriority             Int
+  proteinMin                  Float
+  proteinMax                  Float
+  fatMin                      Float
+  fatMax                      Float
+  carbsMin                    Float
+  carbsMax                    Float
+  minimalDailyCaloriesMen     Int
+  minimalDailyCaloriesWomen   Int
+  mealSwapEnabled              Boolean    @default(false)
+  toleranceOfTotalCalories     Float
+  unit                         String
+  createdAt                    DateTime   @default(now())
+  updatedAt                    DateTime   @updatedAt
+
+  goals    Goal[] @relation("GoalCategories")
+  meals    Meal[] @relation("MealCategories")
+
+  // FK target used by Ingredient.categoryId below.
+  ingredients Ingredient[]
+
+  @@map("categories")
+}
+
+// ---------------------------------------------------------------------------
+// Cuisines
+// ---------------------------------------------------------------------------
+
+model Cuisine {
+  id        String   @id @default(uuid())
+  name      String
+  // "active" | "inactive"
+  state     String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cuisines")
+}
+
+// ---------------------------------------------------------------------------
+// Units
+//
+// Day 2: bare canonical model only. Day 3 wires up Ingredient.unitId /
+// RecipeIngredient relations that are already stubbed below.
+// ---------------------------------------------------------------------------
+
+model Unit {
+  id            String   @id @default(uuid())
+  name          String
+  short         String?
+  equivalentTo  Float?
+  unitType      String?
+  system        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ingredients Ingredient[]
+
+  @@map("units")
+}
+
+// ---------------------------------------------------------------------------
+// Ingredients
+// ---------------------------------------------------------------------------
+
+model Ingredient {
+  id                  String   @id @default(uuid())
+  name                String
+  description         String
+  calories            Float
+  protein             Float
+  fat                 Float
+  carbs               Float
+  vegan               Boolean  @default(false)
+  vegetarian          Boolean  @default(false)
+  glutenFree          Boolean  @default(false)
+  soyaFree            Boolean  @default(false)
+  nutFree             Boolean  @default(false)
+  servingSizeAmount   Float
+  servingSizeUnit     String
+  state               String   @default("active")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  unitId String?
+  unit   Unit?   @relation(fields: [unitId], references: [id])
+
+  @@map("ingredients")
+}
+
+// ---------------------------------------------------------------------------
+// General meal types
+// ---------------------------------------------------------------------------
+
+model GeneralMealType {
+  id                 String   @id @default(uuid())
+  name               String
+  description        String
+  state              String   @default("active")
+  proteinPercentage  Float
+  carbsPercentage    Float
+  fatsPercentage     Float
+  minimumProtein     Float
+  // "HH:mm" strings, e.g. "07:00"
+  startTime          String
+  endTime            String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  meals Meal[] @relation("MealGeneralMealTypes")
+
+  @@map("general_meal_types")
+}
+
+// ---------------------------------------------------------------------------
+// Meals / Recipes
+//
+// Recipe is intentionally minimal today (id, name). Day 3 adds prepTime,
+// cookTime, difficulty, servings, macros, instructions and the
+// RecipeIngredient join model.
+// ---------------------------------------------------------------------------
+
+model Meal {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  calories    Float
+  protein     Float
+  carbs       Float
+  fat         Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categories        Category[]        @relation("MealCategories")
+  generalMealTypes  GeneralMealType[] @relation("MealGeneralMealTypes")
+  recipes           Recipe[]          @relation("MealRecipes")
+
+  @@map("meals")
+}
+
+model Recipe {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  meals Meal[] @relation("MealRecipes")
+
+  @@map("recipes")
+}
+
+// ---------------------------------------------------------------------------
+// Questions (onboarding / survey style questions)
+// ---------------------------------------------------------------------------
+
+model Question {
+  id           String   @id @default(uuid())
+  text         String
+  questionType String
+  // Shape depends on questionType, e.g. [{ label, value }] for multiple choice
+  options      Json
+  state        String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("questions")
+}
