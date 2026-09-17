@@ -12,7 +12,7 @@ export function buildRecipesService(fastify: FastifyInstance) {
       include: {
         ingredient: true,
         unit: true,
-        substitutes: { include: { substituteIngredient: true } },
+        substitutes: { include: { substituteIngredient: true, unit: true } },
       },
     },
   } satisfies Prisma.RecipeInclude;
@@ -25,18 +25,28 @@ export function buildRecipesService(fastify: FastifyInstance) {
       roundAmount: ri.roundAmount,
       ingredient: { connect: { id: ri.ingredientId } },
       unit: { connect: { id: ri.unitId } },
-      substitutes: ri.substituteIngredientIds
+      substitutes: ri.substitutes
         ? {
-            create: ri.substituteIngredientIds.map((substituteIngredientId) => ({
-              substituteIngredient: { connect: { id: substituteIngredientId } },
+            create: ri.substitutes.map((sub) => ({
+              minAmount: sub.minAmount,
+              baseAmount: sub.baseAmount,
+              maxAmount: sub.maxAmount,
+              roundAmount: sub.roundAmount,
+              substituteIngredient: { connect: { id: sub.substituteIngredientId } },
+              unit: { connect: { id: sub.unitId } },
             })),
           }
         : undefined,
     } satisfies Prisma.RecipeIngredientCreateWithoutRecipeInput;
   }
 
+  // Includes the same nested expansion as getById - the frontend's recipe
+  // list screen computes per-recipe nutrition from recipeIngredients and
+  // its edit form needs them populated too. Fine at this app's scale; would
+  // want pagination + a lighter list projection before recipe counts grow
+  // much further.
   async function list() {
-    return prisma.recipe.findMany({ orderBy: { createdAt: "asc" } });
+    return prisma.recipe.findMany({ orderBy: { createdAt: "asc" }, include: detailInclude });
   }
 
   async function getById(id: string) {

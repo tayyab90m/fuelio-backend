@@ -379,7 +379,22 @@ async function main() {
               ingredient: { connect: { id: chickenBreast.id } },
               unit: { connect: { id: gram.id } },
               substitutes: {
-                create: [{ substituteIngredient: { connect: { id: turkeyBreast.id } } }],
+                create: [
+                  {
+                    // Turkey breast is slightly less calorie-dense than
+                    // chicken breast per gram, so its base amount is a bit
+                    // higher for a roughly equivalent protein/calorie swap -
+                    // this is exactly the kind of per-substitute difference
+                    // the old schema (no amount fields at all) couldn't
+                    // represent.
+                    minAmount: 160,
+                    baseAmount: 210,
+                    maxAmount: 260,
+                    roundAmount: 10,
+                    substituteIngredient: { connect: { id: turkeyBreast.id } },
+                    unit: { connect: { id: gram.id } },
+                  },
+                ],
               },
             },
             {
