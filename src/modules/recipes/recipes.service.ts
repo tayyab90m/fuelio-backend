@@ -40,8 +40,13 @@ export function buildRecipesService(fastify: FastifyInstance) {
     } satisfies Prisma.RecipeIngredientCreateWithoutRecipeInput;
   }
 
+  // Includes the same nested expansion as getById - the frontend's recipe
+  // list screen computes per-recipe nutrition from recipeIngredients and
+  // its edit form needs them populated too. Fine at this app's scale; would
+  // want pagination + a lighter list projection before recipe counts grow
+  // much further.
   async function list() {
-    return prisma.recipe.findMany({ orderBy: { createdAt: "asc" } });
+    return prisma.recipe.findMany({ orderBy: { createdAt: "asc" }, include: detailInclude });
   }
 
   async function getById(id: string) {
