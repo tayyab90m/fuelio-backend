@@ -57,6 +57,7 @@ src/
     hash.ts                  bcrypt password hashing + refresh-token hashing
     tokens.ts                 refresh token sign/verify (separate secret from access tokens)
     errors.ts                  AppError / NotFoundError / ConflictError / UnauthorizedError
+    pagination.ts               page/limit query schema + meta shared by every list endpoint
 prisma/
   schema.prisma              Full schema (see "Database schema" below)
   seed.ts                     Seeds a handful of rows per model
@@ -173,6 +174,11 @@ All routes below live under `/api/v1` and require `Authorization: Bearer
 <accessToken>` (every route in these four modules is protected, including
 `GET`/list, for consistency).
 
+**Pagination:** every `GET /` list endpoint below accepts optional `page`
+(default `1`) and `limit` (default `20`, max `100`) query params and returns
+`{ "data": [...], "meta": { "page", "limit", "total", "totalPages" } }`
+instead of a bare array, e.g. `GET /activity-levels?page=2&limit=10`.
+
 - **Activity levels** — `/activity-levels`: `GET /`, `GET /:id`, `POST /`,
   `PUT /:id`, `DELETE /:id`
 - **Goals** — `/goals`: same CRUD shape, plus
@@ -185,7 +191,8 @@ All routes below live under `/api/v1` and require `Authorization: Bearer
   `PUT /:id`, `DELETE /:id`). No `state` field.
 - **Ingredients** — `/ingredients`: same CRUD shape. `GET /` accepts optional
   query params `categoryId` (exact match) and `search` (case-insensitive
-  `contains` on `name`), e.g. `GET /ingredients?categoryId=<uuid>&search=chicken`.
+  `contains` on `name`), plus the standard `page`/`limit` pagination params
+  above, e.g. `GET /ingredients?categoryId=<uuid>&search=chicken&page=1&limit=10`.
   Responses include the related `category` and `unit`.
 - **General meal types** — `/general-meal-types`: same CRUD shape. **Design
   decision:** the model is `GeneralMealType` but the route path uses the
@@ -228,7 +235,9 @@ between the two. This convention is used consistently across `ActivityLevel`,
 
 ### Response / error shape
 
-Successful list/get/create/update responses are wrapped as `{ "data": ... }`.
+Successful get/create/update responses are wrapped as `{ "data": ... }`; list
+(`GET /`) responses additionally carry pagination `meta` (see "Pagination"
+above) as `{ "data": [...], "meta": { page, limit, total, totalPages } }`.
 Errors are always `{ "error": { "message": string, "statusCode": number, "details"?: unknown } }`:
 
 - `400` — validation failure (zod), `details` carries the field errors
@@ -317,7 +326,9 @@ TDEE (`BMR * ActivityLevel.multiplier`) → adjusted calories
 
 Every route below lives under `/api/v1` (e.g. `/api/v1/auth/register`) except
 `GET /health`, and every route except the four `auth` routes requires
-`Authorization: Bearer <accessToken>`.
+`Authorization: Bearer <accessToken>`. Every `list` row below is paginated —
+`?page=&limit=` query params, `{ data, meta }` response — see "Pagination"
+above.
 
 | Module | Method & path | Notes |
 |---|---|---|
@@ -326,54 +337,54 @@ Every route below lives under `/api/v1` (e.g. `/api/v1/auth/register`) except
 | Auth | `POST /auth/login` | `{ email, password }` → `200` |
 | Auth | `POST /auth/refresh` | `{ refreshToken }` → `200`, rotates the refresh token |
 | Auth | `GET /auth/me` | → `200 { user }` |
-| Activity levels | `GET /activity-levels` | list |
+| Activity levels | `GET /activity-levels` | list (paginated) |
 | Activity levels | `GET /activity-levels/:id` | |
 | Activity levels | `POST /activity-levels` | |
 | Activity levels | `PUT /activity-levels/:id` | |
 | Activity levels | `DELETE /activity-levels/:id` | |
-| Goals | `GET /goals` | list, includes `categories` |
+| Goals | `GET /goals` | list (paginated), includes `categories` |
 | Goals | `GET /goals/:id` | |
 | Goals | `POST /goals` | `categoryIds?: string[]` |
 | Goals | `PUT /goals/:id` | |
 | Goals | `DELETE /goals/:id` | |
 | Goals | `PATCH /goals/:id/toggle-state` | flips `active`/`inactive` |
-| Categories | `GET /categories` | list |
+| Categories | `GET /categories` | list (paginated) |
 | Categories | `GET /categories/:id` | |
 | Categories | `POST /categories` | |
 | Categories | `PUT /categories/:id` | |
 | Categories | `DELETE /categories/:id` | |
-| Cuisines | `GET /cuisines` | list |
+| Cuisines | `GET /cuisines` | list (paginated) |
 | Cuisines | `GET /cuisines/:id` | |
 | Cuisines | `POST /cuisines` | |
 | Cuisines | `PUT /cuisines/:id` | |
 | Cuisines | `DELETE /cuisines/:id` | |
 | Cuisines | `PATCH /cuisines/:id/toggle-state` | flips `active`/`inactive` |
-| Units | `GET /units` | list |
+| Units | `GET /units` | list (paginated) |
 | Units | `GET /units/:id` | |
 | Units | `POST /units` | |
 | Units | `PUT /units/:id` | |
 | Units | `DELETE /units/:id` | |
-| Ingredients | `GET /ingredients` | optional `?categoryId=&search=` |
+| Ingredients | `GET /ingredients` | list (paginated), optional `?categoryId=&search=` |
 | Ingredients | `GET /ingredients/:id` | includes `category`, `unit` |
 | Ingredients | `POST /ingredients` | |
 | Ingredients | `PUT /ingredients/:id` | |
 | Ingredients | `DELETE /ingredients/:id` | |
-| General meal types | `GET /general-meal-types` | list |
+| General meal types | `GET /general-meal-types` | list (paginated) |
 | General meal types | `GET /general-meal-types/:id` | |
 | General meal types | `POST /general-meal-types` | |
 | General meal types | `PUT /general-meal-types/:id` | |
 | General meal types | `DELETE /general-meal-types/:id` | |
-| Recipes | `GET /recipes` | list |
+| Recipes | `GET /recipes` | list (paginated) |
 | Recipes | `GET /recipes/:id` | expands `recipeIngredients` -> `ingredient`/`unit`/`substitutes` |
 | Recipes | `POST /recipes` | optional nested `recipeIngredients[]` |
 | Recipes | `PUT /recipes/:id` | replace-all `recipeIngredients` semantics if present |
 | Recipes | `DELETE /recipes/:id` | |
-| Meals | `GET /meals` | list, includes `categories`/`generalMealTypes`/`recipes` |
+| Meals | `GET /meals` | list (paginated), includes `categories`/`generalMealTypes`/`recipes` |
 | Meals | `GET /meals/:id` | |
 | Meals | `POST /meals` | `categoryIds?`/`generalMealTypeIds?`/`recipeIds?` (connect) |
 | Meals | `PUT /meals/:id` | same M2M fields (replace-all `set` semantics if present) |
 | Meals | `DELETE /meals/:id` | |
-| Questions | `GET /questions` | list |
+| Questions | `GET /questions` | list (paginated) |
 | Questions | `GET /questions/:id` | |
 | Questions | `POST /questions` | `{ text, questionType, options, state? }` |
 | Questions | `PUT /questions/:id` | |

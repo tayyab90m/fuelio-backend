@@ -1,12 +1,17 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
-import { CreateActivityLevelInput, UpdateActivityLevelInput } from "./activityLevels.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateActivityLevelInput, ListActivityLevelsQuery, UpdateActivityLevelInput } from "./activityLevels.schema";
 
 export function buildActivityLevelsService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
-  async function list() {
-    return prisma.activityLevel.findMany({ orderBy: { createdAt: "asc" } });
+  async function list(query: ListActivityLevelsQuery) {
+    const [items, total] = await Promise.all([
+      prisma.activityLevel.findMany({ orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.activityLevel.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

@@ -1,13 +1,18 @@
 import { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { NotFoundError } from "../../utils/errors";
-import { CreateQuestionInput, UpdateQuestionInput } from "./questions.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateQuestionInput, ListQuestionsQuery, UpdateQuestionInput } from "./questions.schema";
 
 export function buildQuestionsService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
-  async function list() {
-    return prisma.question.findMany({ orderBy: { createdAt: "asc" } });
+  async function list(query: ListQuestionsQuery) {
+    const [items, total] = await Promise.all([
+      prisma.question.findMany({ orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.question.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

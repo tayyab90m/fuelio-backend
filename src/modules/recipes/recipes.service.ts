@@ -1,7 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { NotFoundError } from "../../utils/errors";
-import { CreateRecipeInput, RecipeIngredientInput, UpdateRecipeInput } from "./recipes.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateRecipeInput, ListRecipesQuery, RecipeIngredientInput, UpdateRecipeInput } from "./recipes.schema";
 
 export function buildRecipesService(fastify: FastifyInstance) {
   const { prisma } = fastify;
@@ -35,8 +36,12 @@ export function buildRecipesService(fastify: FastifyInstance) {
     } satisfies Prisma.RecipeIngredientCreateWithoutRecipeInput;
   }
 
-  async function list() {
-    return prisma.recipe.findMany({ orderBy: { createdAt: "asc" } });
+  async function list(query: ListRecipesQuery) {
+    const [items, total] = await Promise.all([
+      prisma.recipe.findMany({ orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.recipe.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

@@ -6,6 +6,7 @@ import {
   listQuerySchema,
   updateIngredientSchema,
 } from "./ingredients.schema";
+import { buildPaginationMeta } from "../../utils/pagination";
 
 export default async function ingredientsRoutes(fastify: FastifyInstance) {
   const service = buildIngredientsService(fastify);
@@ -14,8 +15,8 @@ export default async function ingredientsRoutes(fastify: FastifyInstance) {
 
   fastify.get("/", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);
-    const items = await service.list(query);
-    return reply.send({ data: items });
+    const { items, total } = await service.list(query);
+    return reply.send({ data: items, meta: buildPaginationMeta(query, total) });
   });
 
   fastify.get("/:id", async (request, reply) => {

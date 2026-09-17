@@ -1,12 +1,17 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
-import { CreateCuisineInput, UpdateCuisineInput } from "./cuisines.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateCuisineInput, ListCuisinesQuery, UpdateCuisineInput } from "./cuisines.schema";
 
 export function buildCuisinesService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
-  async function list() {
-    return prisma.cuisine.findMany({ orderBy: { createdAt: "asc" } });
+  async function list(query: ListCuisinesQuery) {
+    const [items, total] = await Promise.all([
+      prisma.cuisine.findMany({ orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.cuisine.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

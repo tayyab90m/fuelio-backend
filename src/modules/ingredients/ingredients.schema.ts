@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const ingredientStates = ["active", "inactive"] as const;
 
@@ -29,7 +30,7 @@ export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const listQuerySchema = z.object({
+export const listQuerySchema = paginationQuerySchema.extend({
   categoryId: z.string().uuid().optional(),
   search: z.string().min(1).optional(),
 });

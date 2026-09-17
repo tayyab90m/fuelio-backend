@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const generalMealTypeStates = ["active", "inactive"] as const;
 
@@ -24,3 +25,6 @@ export type UpdateGeneralMealTypeInput = z.infer<typeof updateGeneralMealTypeSch
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListGeneralMealTypesQuery = z.infer<typeof listQuerySchema>;
