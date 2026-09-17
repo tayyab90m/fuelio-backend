@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const activityLevelStates = ["active", "inactive"] as const;
 
@@ -20,3 +21,6 @@ export type UpdateActivityLevelInput = z.infer<typeof updateActivityLevelSchema>
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListActivityLevelsQuery = z.infer<typeof listQuerySchema>;

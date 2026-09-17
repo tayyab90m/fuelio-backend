@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const questionStates = ["active", "inactive"] as const;
 
@@ -22,6 +23,9 @@ export type UpdateQuestionInput = z.infer<typeof updateQuestionSchema>;
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListQuestionsQuery = z.infer<typeof listQuerySchema>;
 
 // ---------------------------------------------------------------------------
 // POST /questions/submit-answer

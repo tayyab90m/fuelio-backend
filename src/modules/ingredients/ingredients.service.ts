@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { NotFoundError } from "../../utils/errors";
+import { paginationArgs } from "../../utils/pagination";
 import { CreateIngredientInput, ListIngredientsQuery, UpdateIngredientInput } from "./ingredients.schema";
 
 export function buildIngredientsService(fastify: FastifyInstance) {
@@ -13,7 +14,11 @@ export function buildIngredientsService(fastify: FastifyInstance) {
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.search) where.name = { contains: query.search, mode: "insensitive" };
 
-    return prisma.ingredient.findMany({ where, include, orderBy: { createdAt: "asc" } });
+    const [items, total] = await Promise.all([
+      prisma.ingredient.findMany({ where, include, orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.ingredient.count({ where }),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

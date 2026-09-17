@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const recipeDifficulties = ["easy", "medium", "hard"] as const;
 
@@ -49,3 +50,6 @@ export type UpdateRecipeInput = z.infer<typeof updateRecipeSchema>;
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListRecipesQuery = z.infer<typeof listQuerySchema>;

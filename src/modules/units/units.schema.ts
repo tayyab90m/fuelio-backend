@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const createUnitSchema = z.object({
   name: z.string().min(1),
@@ -15,3 +16,6 @@ export type UpdateUnitInput = z.infer<typeof updateUnitSchema>;
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListUnitsQuery = z.infer<typeof listQuerySchema>;

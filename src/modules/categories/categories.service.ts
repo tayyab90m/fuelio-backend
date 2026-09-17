@@ -1,12 +1,17 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
-import { CreateCategoryInput, UpdateCategoryInput } from "./categories.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateCategoryInput, ListCategoriesQuery, UpdateCategoryInput } from "./categories.schema";
 
 export function buildCategoriesService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
-  async function list() {
-    return prisma.category.findMany({ orderBy: { sortingPriority: "asc" } });
+  async function list(query: ListCategoriesQuery) {
+    const [items, total] = await Promise.all([
+      prisma.category.findMany({ orderBy: { sortingPriority: "asc" }, ...paginationArgs(query) }),
+      prisma.category.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 // "active" -> currently offered to users, "inactive" -> hidden/disabled.
 export const goalStates = ["active", "inactive"] as const;
@@ -30,3 +31,6 @@ export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListGoalsQuery = z.infer<typeof listQuerySchema>;
