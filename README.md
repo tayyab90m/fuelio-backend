@@ -194,10 +194,16 @@ All routes below live under `/api/v1` and require `Authorization: Bearer
   used by every other route prefix in this API (`/activity-levels`, etc.).
 - **Recipes** — `/recipes`: same CRUD shape. `POST`/`PUT` accept a nested
   `recipeIngredients: [{ ingredientId, unitId, minAmount, baseAmount,
-  maxAmount, roundAmount, substituteIngredientIds?: string[] }]` array.
-  `GET /recipes/:id` expands each `recipeIngredient` with its `ingredient`,
-  `unit`, and `substitutes` (each with its `substituteIngredient`). **Design
-  decision — replace-all semantics:** on `PUT`, if `recipeIngredients` is
+  maxAmount, roundAmount, substitutes?: [{ substituteIngredientId, unitId,
+  minAmount, baseAmount, maxAmount, roundAmount }] }]` array — each
+  substitute carries its **own** amounts/unit (added after the initial Day 3
+  build, which gave `IngredientSubstitute` no amount fields at all and left
+  the frontend approximating with the parent recipeIngredient's values; a
+  substitute is rarely a 1:1 gram swap in practice, e.g. turkey breast vs.
+  chicken breast at equivalent protein). `GET /recipes/:id` expands each
+  `recipeIngredient` with its `ingredient`, `unit`, and `substitutes` (each
+  with its own `substituteIngredient` and `unit`). **Design decision —
+  replace-all semantics:** on `PUT`, if `recipeIngredients` is
   present in the body (including `[]`), every existing `RecipeIngredient` row
   for that recipe is deleted (cascading to its `IngredientSubstitute` rows)
   and recreated from the payload inside one `prisma.$transaction`, rather
@@ -409,9 +415,11 @@ module wired up.
   with per-recipe amounts (`minAmount`, `baseAmount`, `maxAmount`,
   `roundAmount`) and a `unitId` FK. `onDelete: Cascade` from `Recipe`, so
   deleting a recipe deletes its recipe-ingredient lines.
-- `IngredientSubstitute` (Day 3, new) — says "ingredient X can substitute for
-  the ingredient on this specific `RecipeIngredient` line" (no amount
-  fields). `onDelete: Cascade` from `RecipeIngredient`.
+- `IngredientSubstitute` (Day 3, new; amounts added in a later migration) —
+  says "ingredient X can substitute for the ingredient on this specific
+  `RecipeIngredient` line," with its own `minAmount`/`baseAmount`/
+  `maxAmount`/`roundAmount`/`unitId` independent of the parent
+  `RecipeIngredient`'s amounts. `onDelete: Cascade` from `RecipeIngredient`.
 - `Question` (Day 4) — generic survey/onboarding question model (`text`,
   `questionType`, `options` JSON, `state`). Full CRUD at `/questions`, plus
   the placeholder `POST /questions/submit-answer` diet-plan calculation

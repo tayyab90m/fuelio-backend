@@ -12,7 +12,7 @@ export function buildRecipesService(fastify: FastifyInstance) {
       include: {
         ingredient: true,
         unit: true,
-        substitutes: { include: { substituteIngredient: true } },
+        substitutes: { include: { substituteIngredient: true, unit: true } },
       },
     },
   } satisfies Prisma.RecipeInclude;
@@ -25,10 +25,15 @@ export function buildRecipesService(fastify: FastifyInstance) {
       roundAmount: ri.roundAmount,
       ingredient: { connect: { id: ri.ingredientId } },
       unit: { connect: { id: ri.unitId } },
-      substitutes: ri.substituteIngredientIds
+      substitutes: ri.substitutes
         ? {
-            create: ri.substituteIngredientIds.map((substituteIngredientId) => ({
-              substituteIngredient: { connect: { id: substituteIngredientId } },
+            create: ri.substitutes.map((sub) => ({
+              minAmount: sub.minAmount,
+              baseAmount: sub.baseAmount,
+              maxAmount: sub.maxAmount,
+              roundAmount: sub.roundAmount,
+              substituteIngredient: { connect: { id: sub.substituteIngredientId } },
+              unit: { connect: { id: sub.unitId } },
             })),
           }
         : undefined,
