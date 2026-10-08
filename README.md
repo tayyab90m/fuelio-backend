@@ -1,6 +1,7 @@
-# Fitness Dashboard Backend
+# Fuelio Backend
 
-A REST API for the Fitness Dashboard app, built with Fastify, TypeScript, Prisma and PostgreSQL.
+A REST API for the Fuelio coach dashboard, built with Fastify, TypeScript, Prisma and PostgreSQL.
+(The database is still named `fitness_dashboard` to avoid breaking existing local setups.)
 
 > **Status: Day 4 of a 4-day build (complete).** Day 2 covered project
 > scaffolding, the full database schema, JWT auth, and CRUD for four
