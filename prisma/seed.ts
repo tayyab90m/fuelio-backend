@@ -4,6 +4,15 @@ import bcrypt from "bcrypt";
 const prisma = new PrismaClient();
 
 async function main() {
+  // The seed creates a login with a publicly documented password. Never let
+  // it run against a production database by accident.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_SEED !== "true") {
+    throw new Error(
+      "Refusing to seed with NODE_ENV=production: it creates a test user with a known password. " +
+        "Set ALLOW_PRODUCTION_SEED=true to override."
+    );
+  }
+
   // --- Test user -----------------------------------------------------
   const passwordHash = await bcrypt.hash("Password123!", 10);
   const user = await prisma.user.upsert({

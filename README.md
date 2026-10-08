@@ -116,6 +116,9 @@ npm run prisma:migrate    # applies prisma/migrations (creates one on first run:
 npm run prisma:seed       # seeds a test user + reference data
 ```
 
+The seed refuses to run when `NODE_ENV=production` (it creates a login with
+the password above); set `ALLOW_PRODUCTION_SEED=true` to override deliberately.
+
 The seed script is idempotent-ish (upserts the user, skips rows that already
 exist by name), so it's safe to re-run.
 
@@ -145,6 +148,9 @@ Before each run, `npm test` resets that database (creating it if needed),
 applies all migrations and runs the seed, so every run starts from the same
 state. It refuses to start if `TEST_DATABASE_URL` is unset or equal to
 `DATABASE_URL`.
+
+Test files run one at a time (`--test-concurrency=1`) because they share one
+database and several assert exact row counts.
 
 The suites boot the real Fastify app (via `buildApp()` + Fastify's
 `.inject()`) and exercise each module over HTTP, e.g. `tests/auth.test.ts`
@@ -191,7 +197,11 @@ instead of a bare array, e.g. `GET /activity-levels?page=2&limit=10`.
 - **Goals** — `/goals`: same CRUD shape, plus
   `PATCH /goals/:id/toggle-state`. Goals have a many-to-many relation to
   Categories (pass `categoryIds: string[]` on create/update).
-- **Categories** — `/categories`: same CRUD shape.
+- **Categories** — `/categories`: same CRUD shape. Responses include the
+  category's `goals` (`[{ id, name }]`). `POST`/`PUT` accept `goalIds: string[]`;
+  on `PUT`, providing it (even `[]`) replaces the category's goals and omitting
+  it leaves them untouched. (Goals expose the same link from their side via
+  `categories`/`categoryIds`.)
 - **Cuisines** — `/cuisines`: same CRUD shape, plus
   `PATCH /cuisines/:id/toggle-state`.
 - **Units** — `/units`: same CRUD shape (`GET /`, `GET /:id`, `POST /`,
