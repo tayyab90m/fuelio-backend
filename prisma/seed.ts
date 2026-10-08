@@ -440,6 +440,27 @@ async function main() {
   } else {
     console.log(`Seeded meal: ${existingMeal.name}`);
   }
+
+  // --- Onboarding questionnaire (drives POST /questions/submit-answer) ------
+  // The frontend's meal-plan generator identifies the physiological answers
+  // by keywords in the question text ("age", "sex", "height", "weight") and
+  // renders activity_level/goal questions from those tables, so keep these
+  // words in the text if editing it.
+  const questionsData = [
+    { text: "What is your age?", questionType: "number", options: [] },
+    { text: "What is your sex?", questionType: "single_choice", options: ["Male", "Female"] },
+    { text: "What is your height?", questionType: "number", options: [] },
+    { text: "What is your weight?", questionType: "number", options: [] },
+    { text: "How active are you?", questionType: "activity_level", options: [] },
+    { text: "What is your goal?", questionType: "goal", options: [] },
+  ];
+  for (const question of questionsData) {
+    const existing = await prisma.question.findFirst({ where: { text: question.text } });
+    if (!existing) {
+      await prisma.question.create({ data: { ...question, state: "active" } });
+    }
+  }
+  console.log(`Seeded ${questionsData.length} questions`);
 }
 
 main()
