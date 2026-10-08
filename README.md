@@ -97,6 +97,7 @@ cp .env.example .env
 | Variable              | Required | Default       | Notes                                             |
 |------------------------|----------|---------------|----------------------------------------------------|
 | `DATABASE_URL`         | yes      | —              | Postgres connection string, e.g. `postgresql://postgres:postgres@localhost:5432/fitness_dashboard?schema=public` |
+| `TEST_DATABASE_URL`    | for tests | —             | Separate database used by `npm test`; reset and reseeded on every run, must differ from `DATABASE_URL` |
 | `JWT_SECRET`           | yes      | —              | Signs access tokens                                |
 | `JWT_REFRESH_SECRET`   | yes      | —              | Signs refresh tokens (must differ from `JWT_SECRET`) |
 | `PORT`                 | no       | `3000`         |                                                     |
@@ -138,11 +139,16 @@ npm run build && npm start   # compiled build
 npm test
 ```
 
-`tests/auth.test.ts` boots the real Fastify app (via `buildApp()` + Fastify's
-`.inject()`) against whatever `DATABASE_URL` is configured and runs the full
-register → duplicate-register(409) → login → bad-password(401) → `/me` →
-refresh → unauthenticated `/me`(401) flow. It needs a live, migrated
-database — point `.env` at one before running it.
+Tests run against `TEST_DATABASE_URL`, never your development database.
+Before each run, `npm test` resets that database (creating it if needed),
+applies all migrations and runs the seed, so every run starts from the same
+state. It refuses to start if `TEST_DATABASE_URL` is unset or equal to
+`DATABASE_URL`.
+
+The suites boot the real Fastify app (via `buildApp()` + Fastify's
+`.inject()`) and exercise each module over HTTP, e.g. `tests/auth.test.ts`
+runs register → duplicate-register(409) → login → bad-password(401) → `/me`
+→ refresh → unauthenticated `/me`(401).
 
 ## Auth flow
 
