@@ -16,6 +16,9 @@ export const createCategorySchema = z.object({
   mealSwapEnabled: z.boolean().default(false),
   toleranceOfTotalCalories: z.number().nonnegative(),
   unit: z.string().min(1),
+  // Goals this category applies to. On update, providing it (even as [])
+  // replaces the category's goals; omitting it leaves them untouched.
+  goalIds: z.array(z.string().uuid()).optional(),
 });
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 
