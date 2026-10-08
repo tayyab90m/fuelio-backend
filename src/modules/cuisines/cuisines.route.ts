@@ -1,15 +1,22 @@
 import { FastifyInstance } from "fastify";
 import { buildCuisinesService } from "./cuisines.service";
-import { createCuisineSchema, idParamSchema, updateCuisineSchema } from "./cuisines.schema";
+import {
+  createCuisineSchema,
+  idParamSchema,
+  listQuerySchema,
+  updateCuisineSchema,
+} from "./cuisines.schema";
+import { buildPaginationMeta } from "../../utils/pagination";
 
 export default async function cuisinesRoutes(fastify: FastifyInstance) {
   const service = buildCuisinesService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
 
-  fastify.get("/", async (_request, reply) => {
-    const items = await service.list();
-    return reply.send({ data: items });
+  fastify.get("/", async (request, reply) => {
+    const query = listQuerySchema.parse(request.query);
+    const { items, total } = await service.list(query);
+    return reply.send({ data: items, meta: buildPaginationMeta(query, total) });
   });
 
   fastify.get("/:id", async (request, reply) => {

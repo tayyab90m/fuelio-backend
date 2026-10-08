@@ -136,8 +136,9 @@ model Unit {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  ingredients       Ingredient[]
-  recipeIngredients RecipeIngredient[]
+  ingredients           Ingredient[]
+  recipeIngredients     RecipeIngredient[]
+  ingredientSubstitutes IngredientSubstitute[]
 
   @@map("units")
 }
@@ -276,14 +277,21 @@ model RecipeIngredient {
 }
 
 model IngredientSubstitute {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  minAmount   Float
+  baseAmount  Float
+  maxAmount   Float
+  roundAmount Float
+  createdAt   DateTime @default(now())
 
   recipeIngredientId String
   recipeIngredient   RecipeIngredient @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
 
   substituteIngredientId String
   substituteIngredient   Ingredient @relation("SubstituteIngredient", fields: [substituteIngredientId], references: [id])
+
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id])
 
   @@map("ingredient_substitutes")
 }

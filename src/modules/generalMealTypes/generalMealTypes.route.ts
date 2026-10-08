@@ -3,17 +3,20 @@ import { buildGeneralMealTypesService } from "./generalMealTypes.service";
 import {
   createGeneralMealTypeSchema,
   idParamSchema,
+  listQuerySchema,
   updateGeneralMealTypeSchema,
 } from "./generalMealTypes.schema";
+import { buildPaginationMeta } from "../../utils/pagination";
 
 export default async function generalMealTypesRoutes(fastify: FastifyInstance) {
   const service = buildGeneralMealTypesService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
 
-  fastify.get("/", async (_request, reply) => {
-    const items = await service.list();
-    return reply.send({ data: items });
+  fastify.get("/", async (request, reply) => {
+    const query = listQuerySchema.parse(request.query);
+    const { items, total } = await service.list(query);
+    return reply.send({ data: items, meta: buildPaginationMeta(query, total) });
   });
 
   fastify.get("/:id", async (request, reply) => {

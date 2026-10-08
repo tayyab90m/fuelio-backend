@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 // "active" -> visible/selectable, "inactive" -> hidden/disabled.
 export const cuisineStates = ["active", "inactive"] as const;
@@ -15,3 +16,6 @@ export type UpdateCuisineInput = z.infer<typeof updateCuisineSchema>;
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListCuisinesQuery = z.infer<typeof listQuerySchema>;

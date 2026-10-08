@@ -1,6 +1,17 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const recipeDifficulties = ["easy", "medium", "hard"] as const;
+
+export const substituteInputSchema = z.object({
+  substituteIngredientId: z.string().uuid(),
+  unitId: z.string().uuid(),
+  minAmount: z.number().nonnegative(),
+  baseAmount: z.number().nonnegative(),
+  maxAmount: z.number().nonnegative(),
+  roundAmount: z.number().nonnegative(),
+});
+export type SubstituteInput = z.infer<typeof substituteInputSchema>;
 
 export const recipeIngredientInputSchema = z.object({
   ingredientId: z.string().uuid(),
@@ -9,7 +20,7 @@ export const recipeIngredientInputSchema = z.object({
   baseAmount: z.number().nonnegative(),
   maxAmount: z.number().nonnegative(),
   roundAmount: z.number().nonnegative(),
-  substituteIngredientIds: z.array(z.string().uuid()).optional(),
+  substitutes: z.array(substituteInputSchema).optional(),
 });
 export type RecipeIngredientInput = z.infer<typeof recipeIngredientInputSchema>;
 
@@ -39,3 +50,6 @@ export type UpdateRecipeInput = z.infer<typeof updateRecipeSchema>;
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListRecipesQuery = z.infer<typeof listQuerySchema>;

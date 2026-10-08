@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
-import { CreateMealInput, UpdateMealInput } from "./meals.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateMealInput, ListMealsQuery, UpdateMealInput } from "./meals.schema";
 
 export function buildMealsService(fastify: FastifyInstance) {
   const { prisma } = fastify;
@@ -12,8 +13,12 @@ export function buildMealsService(fastify: FastifyInstance) {
     return { set: ids.map((id) => ({ id })) };
   }
 
-  async function list() {
-    return prisma.meal.findMany({ include, orderBy: { createdAt: "asc" } });
+  async function list(query: ListMealsQuery) {
+    const [items, total] = await Promise.all([
+      prisma.meal.findMany({ include, orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.meal.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

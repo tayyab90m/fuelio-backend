@@ -1,12 +1,21 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
-import { CreateGeneralMealTypeInput, UpdateGeneralMealTypeInput } from "./generalMealTypes.schema";
+import { paginationArgs } from "../../utils/pagination";
+import {
+  CreateGeneralMealTypeInput,
+  ListGeneralMealTypesQuery,
+  UpdateGeneralMealTypeInput,
+} from "./generalMealTypes.schema";
 
 export function buildGeneralMealTypesService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
-  async function list() {
-    return prisma.generalMealType.findMany({ orderBy: { createdAt: "asc" } });
+  async function list(query: ListGeneralMealTypesQuery) {
+    const [items, total] = await Promise.all([
+      prisma.generalMealType.findMany({ orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.generalMealType.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

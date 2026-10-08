@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const createMealSchema = z.object({
   name: z.string().min(1),
@@ -19,3 +20,6 @@ export type UpdateMealInput = z.infer<typeof updateMealSchema>;
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const listQuerySchema = paginationQuerySchema;
+export type ListMealsQuery = z.infer<typeof listQuerySchema>;

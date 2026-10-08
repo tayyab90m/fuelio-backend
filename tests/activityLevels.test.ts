@@ -118,4 +118,100 @@ describe("activity levels CRUD", () => {
 
     assert.equal(response.statusCode, 404);
   });
+
+  describe("pagination", () => {
+    const createdIds: string[] = [];
+
+    before(async () => {
+      // Baseline total before adding the records this block paginates over -
+      // the table may already hold seed rows plus whatever earlier tests in
+      // this file left behind, so pagination math is checked against a
+      // measured before/after total rather than a hardcoded count.
+      for (let i = 0; i < 5; i += 1) {
+        const response = await app.inject({
+          method: "POST",
+          url: "/api/v1/activity-levels",
+          headers: { authorization: `Bearer ${accessToken}` },
+          payload: {
+            name: `Pagination Smoke Level ${i}`,
+            multiplier: 1.2,
+            description: "Created for pagination smoke test",
+            stepRangeMin: 1000,
+            stepRangeMax: 2000,
+            workoutRangeMin: 1,
+            workoutRangeMax: 2,
+          },
+        });
+        assert.equal(response.statusCode, 201);
+        createdIds.push(response.json().data.id);
+      }
+    });
+
+    after(async () => {
+      for (const id of createdIds) {
+        await app.inject({
+          method: "DELETE",
+          url: `/api/v1/activity-levels/${id}`,
+          headers: { authorization: `Bearer ${accessToken}` },
+        });
+      }
+    });
+
+    it("reports meta.total matching the real row count and paginates without overlap", async () => {
+      // A large limit acts as a single-page baseline to read off the real total.
+      const baseline = await app.inject({
+        method: "GET",
+        url: "/api/v1/activity-levels?page=1&limit=100",
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      assert.equal(baseline.statusCode, 200);
+      const baselineBody = baseline.json();
+      const total = baselineBody.meta.total;
+      assert.equal(baselineBody.data.length, total);
+      assert.ok(total >= 5);
+
+      const page1 = await app.inject({
+        method: "GET",
+        url: "/api/v1/activity-levels?page=1&limit=2",
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      assert.equal(page1.statusCode, 200);
+      const page1Body = page1.json();
+      assert.equal(page1Body.data.length, 2);
+      assert.deepEqual(page1Body.meta, {
+        page: 1,
+        limit: 2,
+        total,
+        totalPages: Math.ceil(total / 2),
+      });
+
+      const page2 = await app.inject({
+        method: "GET",
+        url: "/api/v1/activity-levels?page=2&limit=2",
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      assert.equal(page2.statusCode, 200);
+      const page2Body = page2.json();
+      assert.equal(page2Body.data.length, 2);
+      assert.equal(page2Body.meta.page, 2);
+      assert.equal(page2Body.meta.total, total);
+
+      const page1Ids = page1Body.data.map((item: { id: string }) => item.id);
+      const page2Ids = page2Body.data.map((item: { id: string }) => item.id);
+      assert.equal(page1Ids.filter((id: string) => page2Ids.includes(id)).length, 0);
+    });
+
+    it("defaults to page 1 / limit 20 when no query params are given", async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/v1/activity-levels",
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+
+      assert.equal(response.statusCode, 200);
+      const body = response.json();
+      assert.equal(body.meta.page, 1);
+      assert.equal(body.meta.limit, 20);
+    });
+  });
 });

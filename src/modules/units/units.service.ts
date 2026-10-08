@@ -1,12 +1,17 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
-import { CreateUnitInput, UpdateUnitInput } from "./units.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateUnitInput, ListUnitsQuery, UpdateUnitInput } from "./units.schema";
 
 export function buildUnitsService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
-  async function list() {
-    return prisma.unit.findMany({ orderBy: { createdAt: "asc" } });
+  async function list(query: ListUnitsQuery) {
+    const [items, total] = await Promise.all([
+      prisma.unit.findMany({ orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.unit.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

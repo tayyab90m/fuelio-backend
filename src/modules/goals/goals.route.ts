@@ -1,15 +1,17 @@
 import { FastifyInstance } from "fastify";
 import { buildGoalsService } from "./goals.service";
-import { createGoalSchema, idParamSchema, updateGoalSchema } from "./goals.schema";
+import { createGoalSchema, idParamSchema, listQuerySchema, updateGoalSchema } from "./goals.schema";
+import { buildPaginationMeta } from "../../utils/pagination";
 
 export default async function goalsRoutes(fastify: FastifyInstance) {
   const service = buildGoalsService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
 
-  fastify.get("/", async (_request, reply) => {
-    const items = await service.list();
-    return reply.send({ data: items });
+  fastify.get("/", async (request, reply) => {
+    const query = listQuerySchema.parse(request.query);
+    const { items, total } = await service.list(query);
+    return reply.send({ data: items, meta: buildPaginationMeta(query, total) });
   });
 
   fastify.get("/:id", async (request, reply) => {

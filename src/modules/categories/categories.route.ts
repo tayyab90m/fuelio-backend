@@ -1,15 +1,22 @@
 import { FastifyInstance } from "fastify";
 import { buildCategoriesService } from "./categories.service";
-import { createCategorySchema, idParamSchema, updateCategorySchema } from "./categories.schema";
+import {
+  createCategorySchema,
+  idParamSchema,
+  listQuerySchema,
+  updateCategorySchema,
+} from "./categories.schema";
+import { buildPaginationMeta } from "../../utils/pagination";
 
 export default async function categoriesRoutes(fastify: FastifyInstance) {
   const service = buildCategoriesService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
 
-  fastify.get("/", async (_request, reply) => {
-    const items = await service.list();
-    return reply.send({ data: items });
+  fastify.get("/", async (request, reply) => {
+    const query = listQuerySchema.parse(request.query);
+    const { items, total } = await service.list(query);
+    return reply.send({ data: items, meta: buildPaginationMeta(query, total) });
   });
 
   fastify.get("/:id", async (request, reply) => {

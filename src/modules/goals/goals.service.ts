@@ -1,14 +1,19 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
-import { CreateGoalInput, UpdateGoalInput } from "./goals.schema";
+import { paginationArgs } from "../../utils/pagination";
+import { CreateGoalInput, ListGoalsQuery, UpdateGoalInput } from "./goals.schema";
 
 export function buildGoalsService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
   const include = { categories: true } as const;
 
-  async function list() {
-    return prisma.goal.findMany({ include, orderBy: { createdAt: "asc" } });
+  async function list(query: ListGoalsQuery) {
+    const [items, total] = await Promise.all([
+      prisma.goal.findMany({ include, orderBy: { createdAt: "asc" }, ...paginationArgs(query) }),
+      prisma.goal.count(),
+    ]);
+    return { items, total };
   }
 
   async function getById(id: string) {

@@ -1,15 +1,17 @@
 import { FastifyInstance } from "fastify";
 import { buildRecipesService } from "./recipes.service";
-import { createRecipeSchema, idParamSchema, updateRecipeSchema } from "./recipes.schema";
+import { createRecipeSchema, idParamSchema, listQuerySchema, updateRecipeSchema } from "./recipes.schema";
+import { buildPaginationMeta } from "../../utils/pagination";
 
 export default async function recipesRoutes(fastify: FastifyInstance) {
   const service = buildRecipesService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
 
-  fastify.get("/", async (_request, reply) => {
-    const items = await service.list();
-    return reply.send({ data: items });
+  fastify.get("/", async (request, reply) => {
+    const query = listQuerySchema.parse(request.query);
+    const { items, total } = await service.list(query);
+    return reply.send({ data: items, meta: buildPaginationMeta(query, total) });
   });
 
   fastify.get("/:id", async (request, reply) => {
