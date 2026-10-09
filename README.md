@@ -342,9 +342,10 @@ Errors are always `{ "error": { "message": string, "statusCode": number, "detail
 >   `GeneralMealType`'s own protein/carbs/fats percentages or any nutrition
 >   research.
 > - `mealFramework` is a generated 7-day plan plus shopping list built from
->   the meals/recipes in the database (see below). Meal choice is simple:
->   it does **not** yet filter by diet/allergens or scale portions to hit the
->   calorie target.
+>   the meals/recipes in the database (see below). Meal choice is simple and
+>   unreviewed by a nutritionist: it filters by dietary restrictions and
+>   scales portions toward each slot's calories, but doesn't balance macros
+>   across the week.
 > - `errors` holds non-fatal planning warnings (for example "no meal is
 >   linked to the Lunch meal type"). Invalid input instead throws (`400` for a
 >   zod validation failure, `404` for an unknown `activityLevelId`/`goalId`).
@@ -364,6 +365,7 @@ Errors are always `{ "error": { "message": string, "statusCode": number, "detail
   "weightKg": 82,
   "activityLevelId": "<uuid of a real ActivityLevel row>",
   "goalId": "<uuid of a real Goal row>"
+  "dietaryRestrictions": ["vegetarian"],  // optional: vegan | vegetarian | gluten_free | soy_free | nut_free
   // any additional fields (e.g. answers to other onboarding questions) are
   // accepted and echoed back verbatim in `userAnswers` — the schema uses
   // zod's `.passthrough()`.
@@ -397,6 +399,8 @@ don't match an existing row → `404`.
             "type": "Breakfast",
             "time": "07:00-09:00",
             "is_workout_meal": false,
+            "scale": 1.12,
+            "macros": { "calories": 807, "protein": 71, "fat": 18, "carbs": 91 },
             "recipe": {
               "id": "<uuid>", "name": "Veggie Egg Scramble", "description": "...",
               "prep_time": 5, "cook_time": 8, "instructions": ["..."],
@@ -452,19 +456,28 @@ Implemented in `src/modules/questions/mealPlan.service.ts` (a pure function,
 unit-tested in `tests/mealPlan.test.ts`). For each of 7 days and each slot in
 `macrosDistribution`:
 
-1. Candidates are meals linked to a meal type matching the slot (Breakfast,
+1. **Dietary filter (hard).** If `dietaryRestrictions` is given, a meal is
+   only eligible when *every* ingredient in its recipe carries the matching
+   flag (`vegan`, `vegetarian`, `glutenFree`, `soyaFree`, `nutFree`; a vegan
+   ingredient also counts as vegetarian). There is **no fallback** to
+   unsuitable meals: if nothing fits, the slot is left empty and `errors`
+   explains why. Substitutes are not considered, only the recipe's main
+   ingredients.
+2. Candidates are meals linked to a meal type matching the slot (Breakfast,
    Lunch, Dinner; Snack also accepts "Snacks"/"Morning Snack"/"Afternoon
    Snack"). Names are compared ignoring case, spaces and underscores. If no
-   meal is linked to the slot's type, any meal with a recipe is used and a
+   eligible meal is linked to the slot's type, any eligible meal is used and a
    warning is added to `errors`.
-2. Meals sharing a category with the chosen goal win over those that don't
+3. Meals sharing a category with the chosen goal win over those that don't
    (link categories to goals via `goalIds` on `/categories`).
-3. Then the meal whose calories are closest to the slot's calorie target wins,
+4. Then the meal whose calories are closest to the slot's calorie target wins,
    skipping meals used in the previous two days when an alternative exists.
-4. A meal's first linked recipe is served. The shopping list sums every
-   ingredient across the week per ingredient + unit (no unit conversion) and
-   rounds the base amount **up** to the next multiple of the recipe's
-   `roundAmount`.
+5. **Portion scaling:** the recipe is scaled by `slot calories / meal
+   calories`, clamped to 0.5-2x, and every ingredient amount is rounded to its
+   `roundAmount` (never below one step). The planned meal reports `scale` and
+   its scaled `macros`.
+6. A meal's first linked recipe is served. The shopping list sums the scaled
+   amounts across the week per ingredient + unit (no unit conversion).
 
 Without meals + recipes in the database the plan is empty and `errors` says
 so; `npm run prisma:seed` adds sample meals for every slot.

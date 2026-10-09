@@ -193,6 +193,58 @@ describe("questions module", () => {
       assert.deepEqual(body.errors, []);
     });
 
+    it("only plans meals that satisfy dietary restrictions", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/questions/submit-answer",
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: {
+          age: 30, sex: "male", heightCm: 180, weightKg: 80, activityLevelId, goalId,
+          dietaryRestrictions: ["vegetarian"],
+        },
+      });
+      assert.equal(response.statusCode, 200);
+      const body = response.json();
+      assert.deepEqual(body.userAnswers.dietaryRestrictions, ["vegetarian"]);
+
+      const names = body.mealFramework.data.flatMap((d: { meals: { recipe: { name: string } }[] }) =>
+        d.meals.map((m) => m.recipe.name),
+      );
+      assert.ok(names.length > 0);
+      for (const forbidden of ["Chicken & Rice Bowl", "Turkey & Rice Lunch Box"]) {
+        assert.ok(!names.includes(forbidden), `${forbidden} contains meat`);
+      }
+      const shopping = Object.values(body.mealFramework.shopping_list).map((i: any) => i.name);
+      assert.ok(!shopping.includes("Chicken Breast") && !shopping.includes("Turkey Breast"));
+    });
+
+    it("scales portions toward each slot's calorie target", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/questions/submit-answer",
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { age: 30, sex: "male", heightCm: 180, weightKg: 80, activityLevelId, goalId },
+      });
+      const body = response.json();
+      const day = body.mealFramework.data[0];
+      day.meals.forEach((meal: { scale: number; macros: { calories: number } }, i: number) => {
+        assert.ok(meal.scale >= 0.5 && meal.scale <= 2);
+        const target = body.macrosDistribution[i].macros.calories;
+        // Within the clamp range the portion lands on the slot's target.
+        if (meal.scale > 0.5 && meal.scale < 2) assert.ok(Math.abs(meal.macros.calories - target) <= 1);
+      });
+    });
+
+    it("rejects an unknown dietary restriction with 400", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/questions/submit-answer",
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { age: 30, sex: "male", heightCm: 180, weightKg: 80, activityLevelId, goalId, dietaryRestrictions: ["carnivore"] },
+      });
+      assert.equal(response.statusCode, 400);
+    });
+
     it("echoes extra answer fields submitted alongside the required ones", async () => {
       const response = await app.inject({
         method: "POST",
