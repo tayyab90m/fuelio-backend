@@ -20,6 +20,7 @@ import recipesRoutes from "./modules/recipes/recipes.route";
 import mealsRoutes from "./modules/meals/meals.route";
 import questionsRoutes from "./modules/questions/questions.route";
 import usersRoutes from "./modules/users/users.route";
+import dietPlansRoutes from "./modules/dietPlans/dietPlans.route";
 
 const API_PREFIX = "/api/v1";
 
@@ -80,6 +81,7 @@ export function buildApp(options: FastifyServerOptions = {}, overrides: AppOverr
   app.register(mealsRoutes, { prefix: `${API_PREFIX}/meals` });
   app.register(questionsRoutes, { prefix: `${API_PREFIX}/questions` });
   app.register(usersRoutes, { prefix: `${API_PREFIX}/users` });
+  app.register(dietPlansRoutes, { prefix: `${API_PREFIX}/diet-plans` });
 
   return app;
 }
