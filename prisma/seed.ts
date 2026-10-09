@@ -596,7 +596,8 @@ async function main() {
 
   // --- Onboarding questionnaire (drives POST /questions/submit-answer) ------
   // The frontend's meal-plan generator identifies the physiological answers
-  // by keywords in the question text ("age", "sex", "height", "weight") and
+  // by keywords in the question text ("age", "sex", "height", "weight",
+  // "dietary") and
   // renders activity_level/goal questions from those tables, so keep these
   // words in the text if editing it.
   const questionsData = [
@@ -605,6 +606,14 @@ async function main() {
     { text: "What is your height?", questionType: "number", options: [] },
     { text: "What is your weight?", questionType: "number", options: [] },
     { text: "How active are you?", questionType: "activity_level", options: [] },
+    {
+      // The frontend maps these labels to the plan's `dietaryRestrictions`
+      // (vegan, vegetarian, gluten_free, soy_free, nut_free). Keep the word
+      // "dietary" in the text - it's how the frontend finds this question.
+      text: "Do you have any dietary restrictions? (select all that apply)",
+      questionType: "multiple_choice",
+      options: ["Vegan", "Vegetarian", "Gluten free", "Soy free", "Nut free"],
+    },
     { text: "What is your goal?", questionType: "goal", options: [] },
   ];
   for (const question of questionsData) {
