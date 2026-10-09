@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
 import { SubmitAnswerInput } from "./questions.schema";
-import { buildWeeklyPlan, loadPlanningMeals } from "./mealPlan.service";
+import { buildWeeklyPlan, loadPlanningMeals, PLAN_DAYS } from "./mealPlan.service";
 
 interface CalorieAdjustment {
   type: "increase" | "decrease" | "maintain";
@@ -65,8 +65,9 @@ function round(value: number): number {
  *    protein/carbs/fats percentages or any research.
  *  - `mealFramework` is a generated 7-day plan + shopping list built from the
  *    meals/recipes in the database (see mealPlan.service.ts). It picks meals
- *    by meal type, goal categories and calorie closeness; it does not yet
- *    filter by diet/allergens or scale portions to hit the calorie target.
+ *    by meal type, goal categories and calorie closeness, hard-filters by the
+ *    user's dietary restrictions, and scales portions toward each slot's
+ *    calorie target (see mealPlan.service.ts).
  *  - `errors` holds non-fatal planning warnings (e.g. no meal exists for a
  *    slot); invalid input instead throws (400 for a validation failure, 404
  *    for an unknown `activityLevelId`/`goalId`).
@@ -141,6 +142,8 @@ export async function calculateDietPlan(fastify: FastifyInstance, input: SubmitA
     slots,
     await loadPlanningMeals(fastify),
     goal.categories.map((category) => category.id),
+    PLAN_DAYS,
+    input.dietaryRestrictions ?? [],
   );
 
   return {

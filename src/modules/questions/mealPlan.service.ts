@@ -13,18 +13,51 @@
  *     target wins, but a meal used in the previous `REPEAT_WINDOW` days is
  *     skipped while an alternative exists, so the week has some variety.
  *
- * It is deliberately simple - no allergen/diet filtering and no portion
- * scaling yet - and the README says so.
+ *
+ * Dietary restrictions are a hard filter: a meal is only eligible if EVERY
+ * ingredient in its recipe carries the matching flag. There is deliberately no
+ * fallback to unsuitable meals - an empty slot (with a warning) is safer than
+ * serving something the user said they can't eat. Substitutes are not
+ * considered, only the recipe's main ingredients.
+ *
+ * Portions are scaled toward the slot's calorie target (clamped to
+ * MIN_SCALE-MAX_SCALE) and each ingredient amount is rounded to the recipe's
+ * round amount.
  */
 import { FastifyInstance } from "fastify";
 
 export const PLAN_DAYS = 7;
 const REPEAT_WINDOW = 2;
+export const MIN_SCALE = 0.5;
+export const MAX_SCALE = 2;
+
+export const DIETARY_RESTRICTIONS = ["vegan", "vegetarian", "gluten_free", "soy_free", "nut_free"] as const;
+export type DietaryRestriction = (typeof DIETARY_RESTRICTIONS)[number];
+
+export interface IngredientFlags {
+  vegan: boolean;
+  vegetarian: boolean;
+  glutenFree: boolean;
+  soyaFree: boolean;
+  nutFree: boolean;
+}
+
+const RESTRICTION_CHECKS: Record<DietaryRestriction, (flags: IngredientFlags) => boolean> = {
+  vegan: (f) => f.vegan,
+  // Anything vegan is also vegetarian, even if only one box was ticked.
+  vegetarian: (f) => f.vegetarian || f.vegan,
+  gluten_free: (f) => f.glutenFree,
+  soy_free: (f) => f.soyaFree,
+  nut_free: (f) => f.nutFree,
+};
 
 export interface PlanningMeal {
   id: string;
   name: string;
   calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
   categoryIds: string[];
   mealTypeNames: string[];
   recipe: PlanningRecipe | null;
@@ -49,6 +82,7 @@ export interface PlanningIngredient {
   baseAmount: number;
   maxAmount: number;
   roundAmount: number;
+  flags: IngredientFlags;
 }
 
 export interface PlanSlot {
@@ -64,6 +98,10 @@ export interface PlannedMeal {
   type: string;
   time: string;
   is_workout_meal: boolean;
+  /** Portion multiplier applied to the recipe (1 = as written). */
+  scale: number;
+  /** The meal's macros at that portion size. */
+  macros: { calories: number; protein: number; fat: number; carbs: number };
   recipe: {
     id: string;
     name: string;
@@ -124,25 +162,50 @@ function roundUp(value: number, step: number): number {
 
 const trim = (value: number) => Math.round(value * 100) / 100;
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+/** Nearest multiple of `step`, never below one step for a positive amount. */
+function roundToStep(value: number, step: number): number {
+  if (!(step > 0) || value <= 0) return trim(value);
+  return trim(Math.max(step, Math.round(value / step) * step));
+}
+
+export function isSuitable(meal: PlanningMeal, restrictions: readonly DietaryRestriction[]): boolean {
+  if (restrictions.length === 0) return true;
+  const ingredients = meal.recipe?.ingredients ?? [];
+  return restrictions.every((restriction) => ingredients.every((ing) => RESTRICTION_CHECKS[restriction](ing.flags)));
+}
+
 export function buildWeeklyPlan(
   slots: PlanSlot[],
   meals: PlanningMeal[],
   goalCategoryIds: string[],
   days = PLAN_DAYS,
+  restrictions: readonly DietaryRestriction[] = [],
 ): WeeklyPlan {
   const warnings: string[] = [];
   const goalCategories = new Set(goalCategoryIds);
-  const usable = meals.filter((meal) => meal.recipe);
+  const withRecipe = meals.filter((meal) => meal.recipe);
+  const usable = withRecipe.filter((meal) => isSuitable(meal, restrictions));
 
   const candidatesBySlot = slots.map((slot) => {
     const wanted = slot.mealTypeNames.map(normalise);
     const matching = usable.filter((meal) => meal.mealTypeNames.some((n) => wanted.includes(normalise(n))));
     if (matching.length === 0) {
-      warnings.push(
-        usable.length === 0
-          ? `No meals with a recipe exist yet, so ${slot.name} could not be planned.`
-          : `No meals are linked to the "${slot.name}" meal type, so any meal was used for it.`,
-      );
+      if (usable.length === 0) {
+        warnings.push(
+          withRecipe.length > 0
+            ? `No meals match your dietary restrictions (${restrictions.join(", ")}), so ${slot.name} was left empty.`
+            : `No meals with a recipe exist yet, so ${slot.name} could not be planned.`,
+        );
+      } else {
+        const suitableNote = restrictions.length > 0 ? " that suits your dietary restrictions" : "";
+        warnings.push(
+          withRecipe.some((meal) => meal.mealTypeNames.some((n) => wanted.includes(normalise(n)))) && restrictions.length > 0
+            ? `No "${slot.name}" meals match your dietary restrictions, so another meal was used for it.`
+            : `No meals are linked to the "${slot.name}" meal type, so any meal${suitableNote} was used for it.`,
+        );
+      }
       return usable;
     }
     return matching;
@@ -163,11 +226,25 @@ export function buildWeeklyPlan(
       const meal = pickMeal(candidates, goalCategories, slot.calories, recent);
       history[slotIndex].push(meal.id);
       const recipe = meal.recipe!;
+      const scale = meal.calories > 0 ? clamp(slot.calories / meal.calories, MIN_SCALE, MAX_SCALE) : 1;
+      const scaled = recipe.ingredients.map((ing) => ({
+        ...ing,
+        minAmount: roundToStep(ing.minAmount * scale, ing.roundAmount),
+        baseAmount: roundToStep(ing.baseAmount * scale, ing.roundAmount),
+        maxAmount: roundToStep(ing.maxAmount * scale, ing.roundAmount),
+      }));
 
       dayMeals.push({
         type: slot.name,
         time: slot.time,
         is_workout_meal: false,
+        scale: trim(scale),
+        macros: {
+          calories: Math.round(meal.calories * scale),
+          protein: Math.round(meal.protein * scale),
+          fat: Math.round(meal.fat * scale),
+          carbs: Math.round(meal.carbs * scale),
+        },
         recipe: {
           id: recipe.id,
           name: recipe.name,
@@ -175,7 +252,7 @@ export function buildWeeklyPlan(
           prep_time: recipe.prepTime,
           cook_time: recipe.cookTime,
           instructions: recipe.instructions,
-          ingredients: recipe.ingredients.map((ing) => ({
+          ingredients: scaled.map((ing) => ({
             id: ing.ingredientId,
             name: ing.name,
             min_amount: ing.minAmount,
@@ -187,7 +264,7 @@ export function buildWeeklyPlan(
         },
       });
 
-      for (const ing of recipe.ingredients) {
+      for (const ing of scaled) {
         // Same ingredient in a different unit is a different line - we don't
         // convert between units.
         const key = `${ing.ingredientId}:${ing.unitId}`;
@@ -234,7 +311,12 @@ export async function loadPlanningMeals(fastify: FastifyInstance): Promise<Plann
         include: {
           recipeIngredients: {
             orderBy: { createdAt: "asc" },
-            include: { ingredient: { select: { id: true, name: true } }, unit: { select: { id: true, name: true, short: true } } },
+            include: {
+              ingredient: {
+                select: { id: true, name: true, vegan: true, vegetarian: true, glutenFree: true, soyaFree: true, nutFree: true },
+              },
+              unit: { select: { id: true, name: true, short: true } },
+            },
           },
         },
       },
@@ -247,6 +329,9 @@ export async function loadPlanningMeals(fastify: FastifyInstance): Promise<Plann
       id: meal.id,
       name: meal.name,
       calories: meal.calories,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fat: meal.fat,
       categoryIds: meal.categories.map((c) => c.id),
       mealTypeNames: meal.generalMealTypes.map((t) => t.name),
       recipe: recipe
@@ -266,6 +351,13 @@ export async function loadPlanningMeals(fastify: FastifyInstance): Promise<Plann
               baseAmount: ri.baseAmount,
               maxAmount: ri.maxAmount,
               roundAmount: ri.roundAmount,
+              flags: {
+                vegan: ri.ingredient.vegan,
+                vegetarian: ri.ingredient.vegetarian,
+                glutenFree: ri.ingredient.glutenFree,
+                soyaFree: ri.ingredient.soyaFree,
+                nutFree: ri.ingredient.nutFree,
+              },
             })),
           }
         : null,

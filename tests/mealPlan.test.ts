@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PlanningIngredient, PlanningMeal, PlanSlot, buildWeeklyPlan } from "../src/modules/questions/mealPlan.service";
+import { IngredientFlags, PlanningIngredient, PlanningMeal, PlanSlot, buildWeeklyPlan } from "../src/modules/questions/mealPlan.service";
 
 // Pure planner tests - no database involved.
 
@@ -14,7 +14,9 @@ const recipe = (id: string, ingredients: PlanningIngredient[] = []) => ({
   ingredients,
 });
 
-const rice = (baseAmount: number, roundAmount = 1) => ({
+const allFlags: IngredientFlags = { vegan: true, vegetarian: true, glutenFree: true, soyaFree: true, nutFree: true };
+
+const rice = (baseAmount: number, roundAmount = 1): PlanningIngredient => ({
   ingredientId: "rice",
   name: "Rice",
   unitId: "g",
@@ -23,12 +25,16 @@ const rice = (baseAmount: number, roundAmount = 1) => ({
   baseAmount,
   maxAmount: baseAmount + 10,
   roundAmount,
+  flags: allFlags,
 });
 
 const meal = (id: string, calories: number, mealTypeNames: string[], extra: Partial<PlanningMeal> = {}): PlanningMeal => ({
   id,
   name: `Meal ${id}`,
   calories,
+  protein: calories / 10,
+  carbs: calories / 10,
+  fat: calories / 20,
   categoryIds: [],
   mealTypeNames,
   recipe: recipe(id, [rice(100)]),
@@ -122,19 +128,21 @@ describe("buildWeeklyPlan", () => {
     assert.deepEqual(plan.shopping_list, {});
   });
 
-  it("totals ingredient amounts across the week and rounds up to the round amount", () => {
+  it("totals ingredient amounts across the week, each portion rounded to its round amount", () => {
     const plan = buildWeeklyPlan(
       [slot("Lunch", 600)],
-      [meal("a", 600, ["Lunch"], { recipe: recipe("a", [rice(33, 50)]) })],
+      [meal("a", 600, ["Lunch"], { recipe: recipe("a", [rice(120, 50)]) })],
       [],
       3,
     );
     const entry = Object.values(plan.shopping_list)[0];
     assert.equal(entry.name, "Rice");
-    // 3 x 33g = 99g -> rounded up to the next 50g multiple
-    assert.equal(entry.base_amount, 100);
-    assert.equal(entry.min_amount, 3 * 23);
-    assert.equal(entry.max_amount, 3 * 43);
+    // 120g per day rounds to 100g (nearest 50g), x3 days
+    assert.equal(plan.data[0].meals[0].recipe.ingredients[0].base_amount, 100);
+    assert.equal(entry.base_amount, 300);
+    // min 110 -> 100, max 130 -> 150
+    assert.equal(entry.min_amount, 300);
+    assert.equal(entry.max_amount, 450);
   });
 
   it("keeps the same ingredient in different units on separate shopping lines", () => {
@@ -146,5 +154,95 @@ describe("buildWeeklyPlan", () => {
       1,
     );
     assert.equal(Object.keys(plan.shopping_list).length, 2);
+  });
+});
+
+describe("portion scaling", () => {
+  it("scales a meal toward the slot's calorie target and rounds amounts to the round step", () => {
+    // 400 kcal meal into a 600 kcal slot -> x1.5
+    const plan = buildWeeklyPlan(
+      [slot("Lunch", 600)],
+      [meal("a", 400, ["Lunch"], { recipe: recipe("a", [rice(100, 25)]) })],
+      [],
+      1,
+    );
+    const planned = plan.data[0].meals[0];
+    assert.equal(planned.scale, 1.5);
+    assert.equal(planned.macros.calories, 600);
+    // 100 * 1.5 = 150 -> multiple of 25
+    assert.equal(planned.recipe.ingredients[0].base_amount, 150);
+    assert.equal(Object.values(plan.shopping_list)[0].base_amount, 150);
+  });
+
+  it("clamps the scale to 0.5-2 so a mismatched meal isn't distorted wildly", () => {
+    const tooSmall = buildWeeklyPlan([slot("Lunch", 2000)], [meal("a", 200, ["Lunch"])], [], 1);
+    assert.equal(tooSmall.data[0].meals[0].scale, 2);
+    const tooBig = buildWeeklyPlan([slot("Lunch", 100)], [meal("a", 1000, ["Lunch"])], [], 1);
+    assert.equal(tooBig.data[0].meals[0].scale, 0.5);
+  });
+
+  it("never rounds a used ingredient down to zero", () => {
+    const plan = buildWeeklyPlan(
+      [slot("Lunch", 300)],
+      [meal("a", 600, ["Lunch"], { recipe: recipe("a", [rice(2, 5)]) })],
+      [],
+      1,
+    );
+    assert.equal(plan.data[0].meals[0].recipe.ingredients[0].base_amount, 5);
+  });
+});
+
+describe("dietary restrictions", () => {
+  const withFlags = (id: string, name: string, flags: Partial<IngredientFlags>, mealTypes = ["Lunch"]) =>
+    meal(id, 600, mealTypes, {
+      name,
+      recipe: recipe(id, [{ ...rice(100), flags: { ...allFlags, ...flags } }]),
+    });
+
+  it("only uses meals whose every ingredient satisfies the restriction", () => {
+    const plan = buildWeeklyPlan(
+      [slot("Lunch", 600)],
+      [withFlags("meat", "Meat", { vegetarian: false, vegan: false }), withFlags("veg", "Veg", {})],
+      [],
+      4,
+      ["vegetarian"],
+    );
+    for (const day of plan.data) assert.equal(day.meals[0].recipe.id, "veg");
+  });
+
+  it("treats a vegan ingredient as vegetarian", () => {
+    const plan = buildWeeklyPlan([slot("Lunch", 600)], [withFlags("v", "V", { vegetarian: false, vegan: true })], [], 1, ["vegetarian"]);
+    assert.equal(plan.data[0].meals.length, 1);
+  });
+
+  it("requires ALL restrictions to hold", () => {
+    const plan = buildWeeklyPlan(
+      [slot("Lunch", 600)],
+      [withFlags("gluten", "Gluten", { glutenFree: false }), withFlags("nuts", "Nuts", { nutFree: false })],
+      [],
+      1,
+      ["gluten_free", "nut_free"],
+    );
+    assert.deepEqual(plan.data[0].meals, []);
+    assert.match(plan.warnings[0], /dietary restrictions/);
+  });
+
+  it("never falls back to an unsuitable meal when the slot's type has none", () => {
+    const plan = buildWeeklyPlan(
+      [slot("Dinner", 600)],
+      [withFlags("meat-dinner", "Meat", { vegetarian: false, vegan: false }, ["Dinner"]), withFlags("veg-lunch", "Veg", {}, ["Lunch"])],
+      [],
+      1,
+      ["vegetarian"],
+    );
+    // Falls back to the suitable (lunch-typed) meal with a warning, not to the meat dinner.
+    assert.equal(plan.data[0].meals[0].recipe.id, "veg-lunch");
+    assert.match(plan.warnings[0], /dietary restrictions/);
+  });
+
+  it("leaves the slot empty when nothing suits the restrictions", () => {
+    const plan = buildWeeklyPlan([slot("Lunch", 600)], [withFlags("meat", "Meat", { vegetarian: false, vegan: false })], [], 2, ["vegan"]);
+    assert.deepEqual(plan.data.map((d) => d.meals.length), [0, 0]);
+    assert.match(plan.warnings[0], /left empty/);
   });
 });

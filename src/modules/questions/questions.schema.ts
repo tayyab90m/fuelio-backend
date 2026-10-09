@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DIETARY_RESTRICTIONS } from "./mealPlan.service";
 import { paginationQuerySchema } from "../../utils/pagination";
 
 export const questionStates = ["active", "inactive"] as const;
@@ -43,6 +44,9 @@ export const submitAnswerSchema = z
     weightKg: z.number().positive(),
     activityLevelId: z.string().uuid(),
     goalId: z.string().uuid(),
+    // Hard filter for the weekly plan: only meals whose every ingredient
+    // carries the matching flag are used.
+    dietaryRestrictions: z.array(z.enum(DIETARY_RESTRICTIONS)).max(DIETARY_RESTRICTIONS.length).optional(),
   })
   .passthrough();
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
