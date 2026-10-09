@@ -347,7 +347,7 @@ don't match an existing row → `404`.
             "recipe": {
               "id": "<uuid>", "name": "Veggie Egg Scramble", "description": "...",
               "prep_time": 5, "cook_time": 8, "instructions": ["..."],
-              "ingredients": [{ "id": "<uuid>", "name": "Egg", "base_amount": 3, "unit": "pc" }]
+              "ingredients": [{ "id": "<uuid>", "name": "Egg", "min_amount": 2.25, "base_amount": 3, "max_amount": 3.75, "round_amount": 1, "unit": "pc" }]
             }
           }
           // ...one entry per slot, 7 days

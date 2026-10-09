@@ -57,6 +57,15 @@ describe("buildWeeklyPlan", () => {
       assert.equal(day.meals[1].recipe.id, "d");
     }
     assert.deepEqual(plan.warnings, []);
+    assert.deepEqual(plan.data[0].meals[0].recipe.ingredients[0], {
+      id: "rice",
+      name: "Rice",
+      min_amount: 90,
+      base_amount: 100,
+      max_amount: 110,
+      round_amount: 1,
+      unit: "g",
+    });
   });
 
   it("matches meal types regardless of case, spaces and underscores", () => {
