@@ -13,5 +13,9 @@ export function useTestDatabase(): string {
   }
   process.env.DATABASE_URL = testUrl;
   process.env.NODE_ENV = "test";
+  // Many tests register/login from the same (loopback) IP; keep the rate
+  // limits out of their way. tests/security.test.ts sets its own low limit.
+  process.env.RATE_LIMIT_MAX ??= "100000";
+  process.env.RATE_LIMIT_AUTH_MAX ??= "100000";
   return testUrl;
 }

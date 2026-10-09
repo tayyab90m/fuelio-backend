@@ -1,5 +1,7 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import { env } from "./config/env";
 import prismaPlugin from "./plugins/prisma";
@@ -21,11 +23,19 @@ import usersRoutes from "./modules/users/users.route";
 
 const API_PREFIX = "/api/v1";
 
-export function buildApp(options: FastifyServerOptions = {}): FastifyInstance {
+// Per-app overrides of env-driven settings, mainly so tests can exercise the
+// rate limit / registration switch without touching process.env.
+export interface AppOverrides {
+  authRateLimitMax?: number;
+  registrationEnabled?: boolean;
+}
+
+export function buildApp(options: FastifyServerOptions = {}, overrides: AppOverrides = {}): FastifyInstance {
   const app = Fastify({
     logger: options.logger ?? {
       level: env.NODE_ENV === "test" ? "silent" : "info",
     },
+    trustProxy: env.TRUST_PROXY,
     ...options,
   });
 
@@ -38,6 +48,13 @@ export function buildApp(options: FastifyServerOptions = {}): FastifyInstance {
     // for the many REST routes in this API that use those verbs.
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
   });
+  app.register(helmet);
+  app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: "1 minute",
+    errorResponseBuilder: (_request, context) =>
+      Object.assign(new Error(`Too many requests, please try again in ${context.after}`), { statusCode: context.statusCode }),
+  });
   app.register(sensible);
   app.register(errorHandlerPlugin);
   app.register(prismaPlugin);
@@ -47,7 +64,11 @@ export function buildApp(options: FastifyServerOptions = {}): FastifyInstance {
   app.get("/health", async () => ({ status: "ok" }));
 
   // Versioned module routes
-  app.register(authRoutes, { prefix: `${API_PREFIX}/auth` });
+  app.register(authRoutes, {
+    prefix: `${API_PREFIX}/auth`,
+    authRateLimitMax: overrides.authRateLimitMax ?? env.RATE_LIMIT_AUTH_MAX,
+    registrationEnabled: overrides.registrationEnabled ?? env.REGISTRATION_ENABLED,
+  });
   app.register(activityLevelsRoutes, { prefix: `${API_PREFIX}/activity-levels` });
   app.register(goalsRoutes, { prefix: `${API_PREFIX}/goals` });
   app.register(categoriesRoutes, { prefix: `${API_PREFIX}/categories` });
