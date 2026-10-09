@@ -35,3 +35,10 @@ export class BadRequestError extends AppError {
     this.name = "BadRequestError";
   }
 }
+
+export class ForbiddenError extends AppError {
+  constructor(message = "You do not have permission to perform this action") {
+    super(message, 403);
+    this.name = "ForbiddenError";
+  }
+}

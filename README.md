@@ -108,7 +108,19 @@ cp .env.example .env
 | `NODE_ENV`             | no       | `development`  | `development` \| `test` \| `production`            |
 | `ACCESS_TOKEN_TTL`     | no       | `15m`          | Access token lifetime                              |
 | `REFRESH_TOKEN_TTL`    | no       | `7d`           | Refresh token lifetime                             |
-| `CORS_ORIGIN`          | no       | `*`            | Comma-separated list of allowed origins, or `*`    |
+| `CORS_ORIGIN`          | no       | `*`            | Comma-separated list of allowed origins, or `*`. **Must be a real origin list in production** |
+| `TRUST_PROXY`          | no       | `false`        | Set `true` behind a reverse proxy/load balancer so rate limits use the real client IP |
+| `REGISTRATION_ENABLED` | no       | `true`         | `false` makes `POST /auth/register` return 403; admins can still create users |
+| `RATE_LIMIT_MAX`       | no       | `300`          | Requests per minute per IP, whole API              |
+| `RATE_LIMIT_AUTH_MAX`  | no       | `10`           | Requests per minute per IP on login/register/refresh |
+
+With `NODE_ENV=production` the server refuses to start unless `CORS_ORIGIN` is
+not `*`, both JWT secrets are at least 32 characters, and the two secrets
+differ. Generate secrets with `openssl rand -base64 48`.
+
+Responses carry the standard security headers (`@fastify/helmet`), and
+exceeding a rate limit returns `429` in the usual `{ error: { message,
+statusCode } }` shape with a `Retry-After` header.
 
 ### 4. Run migrations and seed the database
 
