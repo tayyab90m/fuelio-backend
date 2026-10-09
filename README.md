@@ -174,6 +174,29 @@ The suites boot the real Fastify app (via `buildApp()` + Fastify's
 runs register → duplicate-register(409) → login → bad-password(401) → `/me`
 → refresh → unauthenticated `/me`(401).
 
+## Docker and CI
+
+```bash
+docker compose up -d postgres                 # database only (local development)
+
+export JWT_SECRET=$(openssl rand -base64 48)
+export JWT_REFRESH_SECRET=$(openssl rand -base64 48)
+export CORS_ORIGIN=https://your-frontend.example.com
+docker compose --profile app up --build       # database + API
+```
+
+The `Dockerfile` is multi-stage, runs as a non-root user, applies pending
+migrations (`prisma migrate deploy`) on start and exposes a `/health`
+healthcheck. It starts with `NODE_ENV=production`, so the strict environment
+checks above apply (it exits immediately on a wildcard CORS origin or weak
+secrets). Put it behind a TLS-terminating proxy and set `TRUST_PROXY=true`.
+
+`.github/workflows/ci.yml` runs on every push and pull request to `develop`
+and `main`: type-check (src, tests, scripts), build, the full test suite
+against a Postgres service, and `npm audit` on production dependencies
+(fails on high severity). `prisma` is a regular dependency because the
+container needs its CLI to run migrations.
+
 ## Auth flow
 
 - `POST /api/v1/auth/register` `{ email, password, name, phoneNumber? }` →
@@ -223,7 +246,8 @@ Every user has a `role`, carried in the access token and returned by `/auth/*`:
   production): register normally, then promote that account from the server:
 
   ```bash
-  npm run user:promote -- you@example.com admin
+  npm run user:promote -- you@example.com admin                 # from a checkout
+  docker compose exec api node dist/cli/promoteUser.js you@example.com admin   # in the container
   ```
 
 ### User management — `/users` (admin only)

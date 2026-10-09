@@ -1,5 +1,11 @@
 version: "3.9"
 
+# `docker compose up -d postgres`            -> just the database (local development)
+# `docker compose --profile app up --build`  -> database + API in containers
+#
+# The `api` service refuses to start without real secrets: set JWT_SECRET,
+# JWT_REFRESH_SECRET (32+ chars each, different) and CORS_ORIGIN in your shell
+# or an .env file next to this one. Generate secrets with: openssl rand -base64 48
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,6 +24,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    profiles: ["app"]
+    build: .
+    container_name: fuelio-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fitness_dashboard?schema=public
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ chars)}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET (32+ chars, different)}
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN to your frontend origin}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
 
 volumes:
   fitness_dashboard_pgdata:

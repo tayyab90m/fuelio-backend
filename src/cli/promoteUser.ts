@@ -6,7 +6,7 @@
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { isRole, ROLES } from "../src/utils/roles";
+import { isRole, ROLES } from "../utils/roles";
 
 async function main() {
   const [email, role] = process.argv.slice(2);
