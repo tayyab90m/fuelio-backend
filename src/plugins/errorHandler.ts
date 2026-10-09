@@ -20,7 +20,7 @@ function send(reply: FastifyReply, statusCode: number, message: string, details?
 
 export default fp(async function errorHandlerPlugin(fastify: FastifyInstance) {
   fastify.setErrorHandler(
-    (error: FastifyError | Error, _request: FastifyRequest, reply: FastifyReply) => {
+    (error: FastifyError | Error, request: FastifyRequest, reply: FastifyReply) => {
       // Domain-level errors thrown by services (404, 409, 401, 400, ...)
       if (error instanceof AppError) {
         return send(reply, error.statusCode, error.message);
@@ -44,6 +44,14 @@ export default fp(async function errorHandlerPlugin(fastify: FastifyInstance) {
         }
         if (error.code === "P2025") {
           return send(reply, 404, "Resource not found");
+        }
+        // Foreign-key violation. On DELETE the row is still referenced by
+        // other records; otherwise the request pointed at a record that
+        // doesn't exist. Both are client errors, not server faults.
+        if (error.code === "P2003") {
+          return request.method === "DELETE"
+            ? send(reply, 409, "Cannot delete this record because other records still depend on it")
+            : send(reply, 400, "A referenced record does not exist");
         }
       }
 
