@@ -67,6 +67,8 @@ tests/
   activityLevels.test.ts       HTTP-level CRUD smoke test for activityLevels
   questions.test.ts            Question CRUD + submit-answer smoke tests (valid input,
                                 extra-field echo, unknown-id 404s, malformed-body 400, 401)
+  goals / cuisines / units / generalMealTypes / meals .test.ts
+                                HTTP-level CRUD, validation, 401/404 and M2M link tests
 ```
 
 ## Getting started
