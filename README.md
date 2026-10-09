@@ -288,12 +288,13 @@ Errors are always `{ "error": { "message": string, "statusCode": number, "detail
 >   roughly-even illustrative split — it is **not** derived from each
 >   `GeneralMealType`'s own protein/carbs/fats percentages or any nutrition
 >   research.
-> - `mealFramework`'s shape (currently a plain descriptive string) is a
->   placeholder; a real implementation may want a structured object instead.
-> - `errors` is always `[]` on a successful (`200`) response today —
->   invalid input instead throws (`400` for a zod validation failure, `404`
->   for an unknown `activityLevelId`/`goalId`). The field is reserved for
->   future soft-validation / partial-failure cases the real spec may need.
+> - `mealFramework` is a generated 7-day plan plus shopping list built from
+>   the meals/recipes in the database (see below). Meal choice is simple:
+>   it does **not** yet filter by diet/allergens or scale portions to hit the
+>   calorie target.
+> - `errors` holds non-fatal planning warnings (for example "no meal is
+>   linked to the Lunch meal type"). Invalid input instead throws (`400` for a
+>   zod validation failure, `404` for an unknown `activityLevelId`/`goalId`).
 >
 > See the comment block at the top of `calculateDietPlan` in
 > `src/modules/questions/dietPlan.service.ts` for the same disclaimer in
@@ -334,7 +335,32 @@ don't match an existing row → `404`.
     }
     // ...Lunch, Dinner, Snack
   ],
-  "mealFramework": "A 4-meal framework (Breakfast, Lunch, Dinner, Snack) targeting roughly 3226 kcal/day ...",
+  "mealFramework": {
+    "data": [
+      {
+        "day": "1",
+        "meals": [
+          {
+            "type": "Breakfast",
+            "time": "07:00-09:00",
+            "is_workout_meal": false,
+            "recipe": {
+              "id": "<uuid>", "name": "Veggie Egg Scramble", "description": "...",
+              "prep_time": 5, "cook_time": 8, "instructions": ["..."],
+              "ingredients": [{ "id": "<uuid>", "name": "Egg", "base_amount": 3, "unit": "pc" }]
+            }
+          }
+          // ...one entry per slot, 7 days
+        ]
+      }
+    ],
+    "shopping_list": {
+      "<ingredientId>:<unitId>": {
+        "id": "<uuid>", "name": "Egg", "min_amount": 28, "base_amount": 35, "max_amount": 44,
+        "round_amount": 1, "unit": "pc"
+      }
+    }
+  },
   "errors": []
 }
 ```
@@ -346,6 +372,29 @@ TDEE (`BMR * ActivityLevel.multiplier`) → adjusted calories
 `± percentage%`, `maintain` leaves it unchanged) → macros in grams from
 `Goal.macroRatios` percentages (`protein_g = adjustedCalories * protein% / 4`,
 `carbs_g = adjustedCalories * carbs% / 4`, `fat_g = adjustedCalories * fats% / 9`).
+
+### How the weekly plan is generated
+
+Implemented in `src/modules/questions/mealPlan.service.ts` (a pure function,
+unit-tested in `tests/mealPlan.test.ts`). For each of 7 days and each slot in
+`macrosDistribution`:
+
+1. Candidates are meals linked to a meal type matching the slot (Breakfast,
+   Lunch, Dinner; Snack also accepts "Snacks"/"Morning Snack"/"Afternoon
+   Snack"). Names are compared ignoring case, spaces and underscores. If no
+   meal is linked to the slot's type, any meal with a recipe is used and a
+   warning is added to `errors`.
+2. Meals sharing a category with the chosen goal win over those that don't
+   (link categories to goals via `goalIds` on `/categories`).
+3. Then the meal whose calories are closest to the slot's calorie target wins,
+   skipping meals used in the previous two days when an alternative exists.
+4. A meal's first linked recipe is served. The shopping list sums every
+   ingredient across the week per ingredient + unit (no unit conversion) and
+   rounds the base amount **up** to the next multiple of the recipe's
+   `roundAmount`.
+
+Without meals + recipes in the database the plan is empty and `errors` says
+so; `npm run prisma:seed` adds sample meals for every slot.
 
 ## Full endpoint reference
 

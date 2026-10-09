@@ -161,7 +161,7 @@ describe("questions module", () => {
 
       assert.equal(body.userAnswers.activityLevelId, activityLevelId);
       assert.equal(body.userAnswers.goalId, goalId);
-      assert.deepEqual(body.errors, []);
+      assert.ok(Array.isArray(body.errors));
 
       // Plausible human range per the task spec.
       assert.ok(body.macros.calories > 1000 && body.macros.calories < 6000);
@@ -178,8 +178,18 @@ describe("questions module", () => {
         assert.ok(meal.macros.calories >= 0);
       }
 
-      assert.equal(typeof body.mealFramework, "string");
-      assert.ok(body.mealFramework.length > 0);
+      // Generated weekly plan: 7 days, one meal per slot per day, built from
+      // the seeded meals, plus a shopping list of their ingredients.
+      assert.equal(body.mealFramework.data.length, 7);
+      for (const day of body.mealFramework.data) {
+        assert.deepEqual(
+          day.meals.map((m: { type: string }) => m.type),
+          body.macrosDistribution.map((m: { name: string }) => m.name),
+        );
+        assert.ok(day.meals[0].recipe.ingredients.length > 0);
+      }
+      assert.ok(Object.keys(body.mealFramework.shopping_list).length > 0);
+      assert.deepEqual(body.errors, []);
     });
 
     it("echoes extra answer fields submitted alongside the required ones", async () => {

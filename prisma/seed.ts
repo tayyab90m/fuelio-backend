@@ -348,6 +348,17 @@ async function main() {
       startTime: "18:00",
       endTime: "21:00",
     },
+    {
+      name: "Snacks",
+      description: "Light top-up between meals",
+      state: "active",
+      proteinPercentage: 30,
+      carbsPercentage: 40,
+      fatsPercentage: 30,
+      minimumProtein: 10,
+      startTime: "15:00",
+      endTime: "17:00",
+    },
   ];
   const generalMealTypes = [];
   for (const mealType of generalMealTypesData) {
@@ -356,6 +367,10 @@ async function main() {
   }
   console.log(`Seeded ${generalMealTypes.length} general meal types`);
   const dinnerType = generalMealTypes.find((t) => t.name === "Dinner")!;
+  const breakfastType = generalMealTypes.find((t) => t.name === "Breakfast")!;
+  const lunchType = generalMealTypes.find((t) => t.name === "Lunch")!;
+  const snacksType = generalMealTypes.find((t) => t.name === "Snacks")!;
+  const egg = ingredients.find((i) => i.name === "Egg")!;
 
   // --- Recipe (Day 3, with recipeIngredients + a substitute) ---------------
   let chickenRiceRecipe = await prisma.recipe.findFirst({ where: { name: "Chicken & Rice Bowl" } });
@@ -448,6 +463,99 @@ async function main() {
     console.log(`Seeded meal: ${meal.name}`);
   } else {
     console.log(`Seeded meal: ${existingMeal.name}`);
+  }
+
+  // --- More meals so a generated weekly plan has something for every slot ---
+  const extraMeals = [
+    {
+      name: "Veggie Egg Scramble",
+      type: breakfastType,
+      calories: 380,
+      protein: 28,
+      carbs: 12,
+      fat: 24,
+      prepTime: 5,
+      cookTime: 8,
+      instructions: ["Whisk the eggs.", "Steam the broccoli briefly.", "Scramble everything together in a hot pan."],
+      lines: [
+        { ingredient: egg, unit: piece, amount: 3, round: 1 },
+        { ingredient: broccoli, unit: gram, amount: 60, round: 5 },
+      ],
+    },
+    {
+      name: "Turkey & Rice Lunch Box",
+      type: lunchType,
+      calories: 560,
+      protein: 48,
+      carbs: 58,
+      fat: 11,
+      prepTime: 10,
+      cookTime: 15,
+      instructions: ["Cook the rice.", "Pan-sear the turkey breast.", "Pack with steamed broccoli."],
+      lines: [
+        { ingredient: turkeyBreast, unit: gram, amount: 180, round: 10 },
+        { ingredient: brownRice, unit: gram, amount: 140, round: 5 },
+        { ingredient: broccoli, unit: gram, amount: 80, round: 5 },
+      ],
+    },
+    {
+      name: "Boiled Eggs & Broccoli",
+      type: snacksType,
+      calories: 220,
+      protein: 18,
+      carbs: 6,
+      fat: 14,
+      prepTime: 2,
+      cookTime: 10,
+      instructions: ["Boil the eggs for 8-10 minutes.", "Steam the broccoli and serve together."],
+      lines: [
+        { ingredient: egg, unit: piece, amount: 2, round: 1 },
+        { ingredient: broccoli, unit: gram, amount: 50, round: 5 },
+      ],
+    },
+  ];
+  for (const extra of extraMeals) {
+    const existing = await prisma.meal.findFirst({ where: { name: extra.name } });
+    if (existing) continue;
+    const recipe = await prisma.recipe.create({
+      data: {
+        name: extra.name,
+        description: `${extra.name} - seeded sample recipe`,
+        prepTime: extra.prepTime,
+        cookTime: extra.cookTime,
+        difficulty: "easy",
+        servings: 1,
+        calories: extra.calories,
+        protein: extra.protein,
+        carbs: extra.carbs,
+        fat: extra.fat,
+        instructions: extra.instructions,
+        recipeIngredients: {
+          create: extra.lines.map((line) => ({
+            minAmount: line.amount * 0.75,
+            baseAmount: line.amount,
+            maxAmount: line.amount * 1.25,
+            roundAmount: line.round,
+            ingredient: { connect: { id: line.ingredient.id } },
+            unit: { connect: { id: line.unit.id } },
+          })),
+        },
+      },
+    });
+    await prisma.meal.create({
+      data: {
+        name: extra.name,
+        description: `${extra.name} - seeded sample meal`,
+        calories: extra.calories,
+        protein: extra.protein,
+        carbs: extra.carbs,
+        fat: extra.fat,
+        categories: { connect: [{ id: highProteinCategory.id }] },
+        generalMealTypes: { connect: [{ id: extra.type.id }] },
+        recipes: { connect: [{ id: recipe.id }] },
+      },
+    });
+    console.log(`Seeded meal: ${extra.name}`);
   }
 
   // --- Onboarding questionnaire (drives POST /questions/submit-answer) ------

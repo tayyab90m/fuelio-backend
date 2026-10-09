@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../utils/errors";
 import { SubmitAnswerInput } from "./questions.schema";
+import { buildWeeklyPlan, loadPlanningMeals } from "./mealPlan.service";
 
 interface CalorieAdjustment {
   type: "increase" | "decrease" | "maintain";
@@ -27,16 +28,18 @@ interface MealTimingTemplate {
   // Fraction (0-1) of the day's total macros allotted to this meal. Purely
   // illustrative — see disclaimer below.
   portion: number;
+  // GeneralMealType names (lowercase) whose meals can fill this slot.
+  mealTypeNames: string[];
 }
 
 // Example 4-meal split used to break the day's macros into
 // `macrosDistribution` entries. Portions are a simple, roughly-even
 // illustrative split (not derived from any nutrition research) and sum to 1.
 const MEAL_TIMING_TEMPLATE: MealTimingTemplate[] = [
-  { name: "Breakfast", timing: "07:00-09:00", description: "First meal of the day", portion: 0.25 },
-  { name: "Lunch", timing: "12:00-14:00", description: "Midday meal", portion: 0.3 },
-  { name: "Dinner", timing: "18:00-20:00", description: "Evening meal", portion: 0.3 },
-  { name: "Snack", timing: "15:00-16:00", description: "Afternoon snack / top-up", portion: 0.15 },
+  { name: "Breakfast", timing: "07:00-09:00", description: "First meal of the day", portion: 0.25, mealTypeNames: ["breakfast"] },
+  { name: "Lunch", timing: "12:00-14:00", description: "Midday meal", portion: 0.3, mealTypeNames: ["lunch"] },
+  { name: "Dinner", timing: "18:00-20:00", description: "Evening meal", portion: 0.3, mealTypeNames: ["dinner"] },
+  { name: "Snack", timing: "15:00-16:00", description: "Afternoon snack / top-up", portion: 0.15, mealTypeNames: ["snack", "snacks", "morning snack", "afternoon snack"] },
 ];
 
 function round(value: number): number {
@@ -60,13 +63,13 @@ function round(value: number): number {
  *    Dinner/Snack at 25/30/30/15%) is an arbitrary, roughly-even illustrative
  *    split, not derived from `GeneralMealType`'s own
  *    protein/carbs/fats percentages or any research.
- *  - The `mealFramework` field's shape (currently a plain descriptive
- *    string) is a placeholder — a real implementation may want a structured
- *    object instead.
- *  - `errors` is always `[]` on a successful (200) response today; invalid
- *    input instead throws (400 for a validation failure, 404 for an unknown
- *    `activityLevelId`/`goalId`). The field is reserved for future
- *    soft-validation / partial-failure cases the real spec may need.
+ *  - `mealFramework` is a generated 7-day plan + shopping list built from the
+ *    meals/recipes in the database (see mealPlan.service.ts). It picks meals
+ *    by meal type, goal categories and calorie closeness; it does not yet
+ *    filter by diet/allergens or scale portions to hit the calorie target.
+ *  - `errors` holds non-fatal planning warnings (e.g. no meal exists for a
+ *    slot); invalid input instead throws (400 for a validation failure, 404
+ *    for an unknown `activityLevelId`/`goalId`).
  *
  * Do not treat any of the numbers this produces as real nutrition advice.
  * ============================================================================
@@ -78,7 +81,10 @@ export async function calculateDietPlan(fastify: FastifyInstance, input: SubmitA
   const activityLevel = await prisma.activityLevel.findUnique({ where: { id: activityLevelId } });
   if (!activityLevel) throw new NotFoundError("Activity level not found");
 
-  const goal = await prisma.goal.findUnique({ where: { id: goalId } });
+  const goal = await prisma.goal.findUnique({
+    where: { id: goalId },
+    include: { categories: { select: { id: true } } },
+  });
   if (!goal) throw new NotFoundError("Goal not found");
 
   const calorieAdjustment = goal.calorieAdjustment as unknown as CalorieAdjustment;
@@ -125,17 +131,23 @@ export async function calculateDietPlan(fastify: FastifyInstance, input: SubmitA
     },
   }));
 
-  const mealFramework =
-    `A ${MEAL_TIMING_TEMPLATE.length}-meal framework (${MEAL_TIMING_TEMPLATE.map((m) => m.name).join(", ")}) ` +
-    `targeting roughly ${macros.calories} kcal/day (${macros.protein}g protein, ${macros.carbs}g carbs, ` +
-    `${macros.fat}g fat), split across meals per "macrosDistribution" above. Based on goal "${goal.name}" ` +
-    `and activity level "${activityLevel.name}".`;
+  const slots = MEAL_TIMING_TEMPLATE.map((meal, index) => ({
+    name: meal.name,
+    mealTypeNames: meal.mealTypeNames,
+    time: meal.timing,
+    calories: macrosDistribution[index].macros.calories,
+  }));
+  const { warnings, ...mealFramework } = buildWeeklyPlan(
+    slots,
+    await loadPlanningMeals(fastify),
+    goal.categories.map((category) => category.id),
+  );
 
   return {
     userAnswers: input,
     macros,
     macrosDistribution,
     mealFramework,
-    errors: [] as string[],
+    errors: warnings,
   };
 }
