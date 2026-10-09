@@ -1,13 +1,14 @@
 import { FastifyInstance } from "fastify";
-import { buildUnitsService } from "./units.service";
-import { createUnitSchema, idParamSchema, listQuerySchema, updateUnitSchema } from "./units.schema";
+import { buildUsersService } from "./users.service";
+import { createUserSchema, idParamSchema, listQuerySchema, updateUserSchema } from "./users.schema";
 import { buildPaginationMeta } from "../../utils/pagination";
 
-export default async function unitsRoutes(fastify: FastifyInstance) {
-  const service = buildUnitsService(fastify);
+// Admin-only user management.
+export default async function usersRoutes(fastify: FastifyInstance) {
+  const service = buildUsersService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
-  fastify.addHook("preHandler", fastify.requireStaffForWrites);
+  fastify.addHook("preHandler", fastify.requireRole("admin"));
 
   fastify.get("/", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);
@@ -17,26 +18,23 @@ export default async function unitsRoutes(fastify: FastifyInstance) {
 
   fastify.get("/:id", async (request, reply) => {
     const { id } = idParamSchema.parse(request.params);
-    const item = await service.getById(id);
-    return reply.send({ data: item });
+    return reply.send({ data: await service.getById(id) });
   });
 
   fastify.post("/", async (request, reply) => {
-    const body = createUnitSchema.parse(request.body);
-    const item = await service.create(body);
-    return reply.code(201).send({ data: item });
+    const body = createUserSchema.parse(request.body);
+    return reply.code(201).send({ data: await service.create(body) });
   });
 
-  fastify.put("/:id", async (request, reply) => {
+  fastify.patch("/:id", async (request, reply) => {
     const { id } = idParamSchema.parse(request.params);
-    const body = updateUnitSchema.parse(request.body);
-    const item = await service.update(id, body);
-    return reply.send({ data: item });
+    const body = updateUserSchema.parse(request.body);
+    return reply.send({ data: await service.update(id, body) });
   });
 
   fastify.delete("/:id", async (request, reply) => {
     const { id } = idParamSchema.parse(request.params);
-    await service.remove(id);
+    await service.remove(id, request.user.sub);
     return reply.code(204).send();
   });
 }

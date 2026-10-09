@@ -2,13 +2,14 @@ import { FastifyInstance } from "fastify";
 import { hashPassword, hashToken, verifyPassword, verifyTokenHash } from "../../utils/hash";
 import { signRefreshToken, verifyRefreshToken } from "../../utils/tokens";
 import { ConflictError, UnauthorizedError } from "../../utils/errors";
+import { Role } from "../../utils/roles";
 import { LoginBody, RefreshBody, RegisterBody, toPublicUser } from "./auth.schema";
 
 export function buildAuthService(fastify: FastifyInstance) {
   const { prisma } = fastify;
 
-  async function issueTokenPair(userId: string, email: string) {
-    const accessToken = fastify.jwt.sign({ sub: userId, email });
+  async function issueTokenPair(userId: string, email: string, role: string) {
+    const accessToken = fastify.jwt.sign({ sub: userId, email, role: role as Role });
     const refreshToken = signRefreshToken({ sub: userId });
 
     await prisma.user.update({
@@ -35,7 +36,7 @@ export function buildAuthService(fastify: FastifyInstance) {
       },
     });
 
-    const tokens = await issueTokenPair(user.id, user.email);
+    const tokens = await issueTokenPair(user.id, user.email, user.role);
     return { user: toPublicUser(user), ...tokens };
   }
 
@@ -50,7 +51,7 @@ export function buildAuthService(fastify: FastifyInstance) {
       throw new UnauthorizedError("Invalid email or password");
     }
 
-    const tokens = await issueTokenPair(user.id, user.email);
+    const tokens = await issueTokenPair(user.id, user.email, user.role);
     return { user: toPublicUser(user), ...tokens };
   }
 
@@ -73,7 +74,7 @@ export function buildAuthService(fastify: FastifyInstance) {
 
     // Rotate: issue a brand new access + refresh token pair and replace the
     // stored refresh token hash so the old refresh token can't be reused.
-    const tokens = await issueTokenPair(user.id, user.email);
+    const tokens = await issueTokenPair(user.id, user.email, user.role);
     return tokens;
   }
 

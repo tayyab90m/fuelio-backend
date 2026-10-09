@@ -7,6 +7,7 @@ export default async function recipesRoutes(fastify: FastifyInstance) {
   const service = buildRecipesService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
+  fastify.addHook("preHandler", fastify.requireStaffForWrites);
 
   fastify.get("/", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);

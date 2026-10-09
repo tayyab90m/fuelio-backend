@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
+import { withRole } from "./helpers";
 
 // HTTP-level test for recipes, focused on the nested recipeIngredients ->
 // substitutes round-trip and each substitute's own amount/unit fields
@@ -29,7 +30,7 @@ describe("recipes with nested ingredients and substitutes", () => {
       url: "/api/v1/auth/register",
       payload: { email, password: "Password123!", name: "Recipes Smoke Test" },
     });
-    accessToken = register.json().accessToken;
+    accessToken = await withRole(app, register.json(), "coach");
 
     const unit = await app.inject({
       method: "POST",

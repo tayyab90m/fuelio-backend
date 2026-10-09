@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
+import { withRole } from "./helpers";
 
 // Basic HTTP-level CRUD smoke test for the activityLevels module (Day 2).
 // This module previously had no HTTP-level test coverage (only auth.test.ts
@@ -23,7 +24,7 @@ describe("activity levels CRUD", () => {
       url: "/api/v1/auth/register",
       payload: { email, password: "Password123!", name: "Activity Levels Smoke Test" },
     });
-    accessToken = register.json().accessToken;
+    accessToken = await withRole(app, register.json(), "coach");
   });
 
   after(async () => {

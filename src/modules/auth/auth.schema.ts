@@ -19,11 +19,12 @@ export const refreshBodySchema = z.object({
 });
 export type RefreshBody = z.infer<typeof refreshBodySchema>;
 
-export function toPublicUser(user: { id: string; email: string; name: string; phoneNumber: string | null }) {
+export function toPublicUser(user: { id: string; email: string; name: string; phoneNumber: string | null; role: string }) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     phoneNumber: user.phoneNumber,
+    role: user.role,
   };
 }

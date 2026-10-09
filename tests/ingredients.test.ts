@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
+import { withRole } from "./helpers";
 
 // HTTP-level pagination smoke test for the ingredients module - the only
 // list endpoint with pre-existing query-param filtering (categoryId/search)
@@ -22,7 +23,7 @@ describe("ingredients pagination", () => {
       url: "/api/v1/auth/register",
       payload: { email, password: "Password123!", name: "Ingredients Pagination Smoke Test" },
     });
-    accessToken = register.json().accessToken;
+    accessToken = await withRole(app, register.json(), "coach");
 
     for (let i = 0; i < 5; i += 1) {
       const response = await app.inject({

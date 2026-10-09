@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
+import { withRole } from "./helpers";
 
 const categoryPayload = (name: string) => ({
   name,
@@ -35,7 +36,7 @@ describe("categories CRUD and goal links", () => {
       url: "/api/v1/auth/register",
       payload: { email: `smoke-categories-${Date.now()}@fitnessdashboard.dev`, password: "Password123!", name: "Categories Test" },
     });
-    auth = { authorization: `Bearer ${register.json().accessToken}` };
+    auth = { authorization: `Bearer ${await withRole(app, register.json(), "coach")}` };
 
     const goals = await app.inject({ method: "GET", url: "/api/v1/goals", headers: auth });
     goalIds = goals.json().data.slice(0, 2).map((g: { id: string }) => g.id);

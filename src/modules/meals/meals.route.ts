@@ -7,6 +7,7 @@ export default async function mealsRoutes(fastify: FastifyInstance) {
   const service = buildMealsService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
+  fastify.addHook("preHandler", fastify.requireStaffForWrites);
 
   fastify.get("/", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);

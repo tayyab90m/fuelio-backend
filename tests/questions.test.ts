@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
+import { withRole } from "./helpers";
 
 // Smoke tests for the Day 4 Question CRUD module and the
 // POST /api/v1/questions/submit-answer placeholder diet-plan calculation.
@@ -23,7 +24,7 @@ describe("questions module", () => {
       url: "/api/v1/auth/register",
       payload: { email, password: "Password123!", name: "Questions Smoke Test" },
     });
-    accessToken = register.json().accessToken;
+    accessToken = await withRole(app, register.json(), "coach");
 
     // Pull real seeded reference rows rather than hardcoding ids.
     const activityLevels = await app.inject({

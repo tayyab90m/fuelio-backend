@@ -14,6 +14,7 @@ export default async function questionsRoutes(fastify: FastifyInstance) {
   const service = buildQuestionsService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
+  fastify.addHook("preHandler", fastify.requireStaffForWrites);
 
   fastify.get("/", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);
@@ -23,7 +24,7 @@ export default async function questionsRoutes(fastify: FastifyInstance) {
 
   // Registered ahead of the generic "/:id" routes below purely for
   // readability; the literal path never collides with the ":id" param route.
-  fastify.post("/submit-answer", async (request, reply) => {
+  fastify.post("/submit-answer", { config: { allowClients: true } }, async (request, reply) => {
     const body = submitAnswerSchema.parse(request.body);
     const result = await calculateDietPlan(fastify, body);
     return reply.send(result);
