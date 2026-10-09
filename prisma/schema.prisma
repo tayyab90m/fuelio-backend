@@ -25,6 +25,9 @@ model User {
   passwordHash      String
   name              String
   phoneNumber       String?
+  // "admin" | "coach" | "client". Public registration always creates a
+  // "client"; only an admin can grant a higher role.
+  role              String   @default("client")
   // Only the HASH of the current refresh token is stored, never the raw
   // token. Verifying a refresh token means hashing the incoming value and
   // comparing it to this field.

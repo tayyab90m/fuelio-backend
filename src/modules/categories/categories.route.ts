@@ -12,6 +12,7 @@ export default async function categoriesRoutes(fastify: FastifyInstance) {
   const service = buildCategoriesService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
+  fastify.addHook("preHandler", fastify.requireStaffForWrites);
 
   fastify.get("/", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);

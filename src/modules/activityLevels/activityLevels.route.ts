@@ -12,6 +12,7 @@ export default async function activityLevelsRoutes(fastify: FastifyInstance) {
   const service = buildActivityLevelsService(fastify);
 
   fastify.addHook("preHandler", fastify.authenticate);
+  fastify.addHook("preHandler", fastify.requireStaffForWrites);
 
   fastify.get("/", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);
