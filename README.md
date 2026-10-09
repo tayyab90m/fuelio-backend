@@ -1,6 +1,7 @@
-# Fitness Dashboard Backend
+# Fuelio Backend
 
-A REST API for the Fitness Dashboard app, built with Fastify, TypeScript, Prisma and PostgreSQL.
+A REST API for the Fuelio coach dashboard, built with Fastify, TypeScript, Prisma and PostgreSQL.
+(The database is still named `fitness_dashboard` to avoid breaking existing local setups.)
 
 > **Status: Day 4 of a 4-day build (complete).** Day 2 covered project
 > scaffolding, the full database schema, JWT auth, and CRUD for four
@@ -66,6 +67,8 @@ tests/
   activityLevels.test.ts       HTTP-level CRUD smoke test for activityLevels
   questions.test.ts            Question CRUD + submit-answer smoke tests (valid input,
                                 extra-field echo, unknown-id 404s, malformed-body 400, 401)
+  goals / cuisines / units / generalMealTypes / meals .test.ts
+                                HTTP-level CRUD, validation, 401/404 and M2M link tests
 ```
 
 ## Getting started
@@ -97,6 +100,7 @@ cp .env.example .env
 | Variable              | Required | Default       | Notes                                             |
 |------------------------|----------|---------------|----------------------------------------------------|
 | `DATABASE_URL`         | yes      | —              | Postgres connection string, e.g. `postgresql://postgres:postgres@localhost:5432/fitness_dashboard?schema=public` |
+| `TEST_DATABASE_URL`    | for tests | —             | Separate database used by `npm test`; reset and reseeded on every run, must differ from `DATABASE_URL` |
 | `JWT_SECRET`           | yes      | —              | Signs access tokens                                |
 | `JWT_REFRESH_SECRET`   | yes      | —              | Signs refresh tokens (must differ from `JWT_SECRET`) |
 | `PORT`                 | no       | `3000`         |                                                     |
@@ -113,6 +117,9 @@ npm run prisma:generate   # generate the Prisma client
 npm run prisma:migrate    # applies prisma/migrations (creates one on first run: --name init)
 npm run prisma:seed       # seeds a test user + reference data
 ```
+
+The seed refuses to run when `NODE_ENV=production` (it creates a login with
+the password above); set `ALLOW_PRODUCTION_SEED=true` to override deliberately.
 
 The seed script is idempotent-ish (upserts the user, skips rows that already
 exist by name), so it's safe to re-run.
@@ -138,11 +145,19 @@ npm run build && npm start   # compiled build
 npm test
 ```
 
-`tests/auth.test.ts` boots the real Fastify app (via `buildApp()` + Fastify's
-`.inject()`) against whatever `DATABASE_URL` is configured and runs the full
-register → duplicate-register(409) → login → bad-password(401) → `/me` →
-refresh → unauthenticated `/me`(401) flow. It needs a live, migrated
-database — point `.env` at one before running it.
+Tests run against `TEST_DATABASE_URL`, never your development database.
+Before each run, `npm test` resets that database (creating it if needed),
+applies all migrations and runs the seed, so every run starts from the same
+state. It refuses to start if `TEST_DATABASE_URL` is unset or equal to
+`DATABASE_URL`.
+
+Test files run one at a time (`--test-concurrency=1`) because they share one
+database and several assert exact row counts.
+
+The suites boot the real Fastify app (via `buildApp()` + Fastify's
+`.inject()`) and exercise each module over HTTP, e.g. `tests/auth.test.ts`
+runs register → duplicate-register(409) → login → bad-password(401) → `/me`
+→ refresh → unauthenticated `/me`(401).
 
 ## Auth flow
 
@@ -184,7 +199,11 @@ instead of a bare array, e.g. `GET /activity-levels?page=2&limit=10`.
 - **Goals** — `/goals`: same CRUD shape, plus
   `PATCH /goals/:id/toggle-state`. Goals have a many-to-many relation to
   Categories (pass `categoryIds: string[]` on create/update).
-- **Categories** — `/categories`: same CRUD shape.
+- **Categories** — `/categories`: same CRUD shape. Responses include the
+  category's `goals` (`[{ id, name }]`). `POST`/`PUT` accept `goalIds: string[]`;
+  on `PUT`, providing it (even `[]`) replaces the category's goals and omitting
+  it leaves them untouched. (Goals expose the same link from their side via
+  `categories`/`categoryIds`.)
 - **Cuisines** — `/cuisines`: same CRUD shape, plus
   `PATCH /cuisines/:id/toggle-state`.
 - **Units** — `/units`: same CRUD shape (`GET /`, `GET /:id`, `POST /`,

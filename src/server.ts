@@ -6,7 +6,7 @@ const app = buildApp();
 app
   .listen({ port: env.PORT, host: env.HOST })
   .then((address) => {
-    app.log.info(`fitness-dashboard-backend listening at ${address}`);
+    app.log.info(`fuelio-backend listening at ${address}`);
   })
   .catch((err) => {
     app.log.error(err);
