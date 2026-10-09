@@ -71,7 +71,15 @@ export interface PlannedMeal {
     prep_time: number;
     cook_time: number;
     instructions: string[];
-    ingredients: { id: string; name: string; base_amount: number; unit: string }[];
+    ingredients: {
+      id: string;
+      name: string;
+      min_amount: number;
+      base_amount: number;
+      max_amount: number;
+      round_amount: number;
+      unit: string;
+    }[];
   };
 }
 
@@ -170,7 +178,10 @@ export function buildWeeklyPlan(
           ingredients: recipe.ingredients.map((ing) => ({
             id: ing.ingredientId,
             name: ing.name,
+            min_amount: ing.minAmount,
             base_amount: ing.baseAmount,
+            max_amount: ing.maxAmount,
+            round_amount: ing.roundAmount,
             unit: ing.unit,
           })),
         },
