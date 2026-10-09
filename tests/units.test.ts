@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
+import { withRole } from "./helpers";
 
 const UNKNOWN_ID = "00000000-0000-4000-8000-000000000000";
 
@@ -20,7 +21,7 @@ describe("units CRUD", () => {
       url: "/api/v1/auth/register",
       payload: { email: `smoke-units-${suffix}@fitnessdashboard.dev`, password: "Password123!", name: "Units Test" },
     });
-    auth = { authorization: `Bearer ${register.json().accessToken}` };
+    auth = { authorization: `Bearer ${await withRole(app, register.json(), "coach")}` };
   });
 
   after(async () => {

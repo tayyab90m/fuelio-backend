@@ -13,19 +13,24 @@ async function main() {
     );
   }
 
-  // --- Test user -----------------------------------------------------
+  // --- Sample accounts (one per role) ---------------------------------
+  // All share the documented dev password. The seeded admin is the account
+  // the frontend's staff screens are tested with; `update` keeps the role in
+  // sync when re-seeding an older database.
   const passwordHash = await bcrypt.hash("Password123!", 10);
-  const user = await prisma.user.upsert({
-    where: { email: "test@fitnessdashboard.dev" },
-    update: {},
-    create: {
-      email: "test@fitnessdashboard.dev",
-      passwordHash,
-      name: "Test User",
-      phoneNumber: "+10000000000",
-    },
-  });
-  console.log(`Seeded user: ${user.email} (password: Password123!)`);
+  const sampleUsers = [
+    { email: "test@fitnessdashboard.dev", name: "Test User (admin)", role: "admin" },
+    { email: "coach@fitnessdashboard.dev", name: "Sample Coach", role: "coach" },
+    { email: "client@fitnessdashboard.dev", name: "Sample Client", role: "client" },
+  ];
+  for (const sample of sampleUsers) {
+    const user = await prisma.user.upsert({
+      where: { email: sample.email },
+      update: { role: sample.role },
+      create: { ...sample, passwordHash, phoneNumber: "+10000000000" },
+    });
+    console.log(`Seeded ${user.role}: ${user.email} (password: Password123!)`);
+  }
 
   // --- Activity levels -------------------------------------------------
   const activityLevels = [

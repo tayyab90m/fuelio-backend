@@ -13,6 +13,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
+    "user:promote": "tsx scripts/promote-user.ts",
     "pretest": "tsx scripts/prepare-test-db.ts",
     "test": "node --import tsx --import ./tests/setup.ts --test --test-concurrency=1 tests/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"

@@ -124,10 +124,13 @@ the password above); set `ALLOW_PRODUCTION_SEED=true` to override deliberately.
 The seed script is idempotent-ish (upserts the user, skips rows that already
 exist by name), so it's safe to re-run.
 
-Seeded test user:
+Seeded accounts (all use the password `Password123!`):
 
-- email: `test@fitnessdashboard.dev`
-- password: `Password123!`
+| Email | Role |
+|---|---|
+| `test@fitnessdashboard.dev` | admin |
+| `coach@fitnessdashboard.dev` | coach |
+| `client@fitnessdashboard.dev` | client |
 
 ### 5. Run the app
 
@@ -182,6 +185,44 @@ SHA-256 hash of the current refresh token is ever persisted
 (`User.refreshTokenHash`) — the raw token is never stored. Every successful
 register/login/refresh rotates and re-persists a new hash, so a leaked
 refresh token can only be replayed until the next refresh.
+
+## Roles and permissions
+
+Every user has a `role`, carried in the access token and returned by `/auth/*`:
+
+| Role | Can do |
+|---|---|
+| `client` | Read all content, generate diet plans (`POST /questions/submit-answer`) |
+| `coach` | Everything a client can, plus create/update/delete content: meals, recipes, ingredients, goals, categories, cuisines, units, meal types, activity levels, questions |
+| `admin` | Everything a coach can, plus manage users (`/users`) |
+
+- `POST /auth/register` **always** creates a `client`; a `role` in the body is
+  ignored. Only an admin can grant a higher role (`POST /users`,
+  `PATCH /users/:id`).
+- Reads (`GET`) on content are open to any signed-in user. Any other method
+  returns `403 { error: { message, statusCode } }` for a client. Routes opt out
+  with `config: { allowClients: true }` (used by `submit-answer`).
+- Changing a user's role revokes their stored refresh token, so they must sign
+  in again and get a token with the new role. An already-issued access token
+  keeps its old role until it expires (`ACCESS_TOKEN_TTL`, 15m by default).
+- The system always keeps at least one admin: the last admin can't be demoted
+  or deleted, and nobody can delete their own account.
+- **Creating the first admin** on a fresh database (the seed is blocked in
+  production): register normally, then promote that account from the server:
+
+  ```bash
+  npm run user:promote -- you@example.com admin
+  ```
+
+### User management — `/users` (admin only)
+
+- `GET /users?search=&role=&page=&limit=`
+- `GET /users/:id`
+- `POST /users` `{ email, password, name, phoneNumber?, role? }`
+- `PATCH /users/:id` `{ name?, phoneNumber?, role? }`
+- `DELETE /users/:id`
+
+Responses never include password or token hashes.
 
 ## Entity CRUD modules
 
@@ -399,8 +440,9 @@ so; `npm run prisma:seed` adds sample meals for every slot.
 ## Full endpoint reference
 
 Every route below lives under `/api/v1` (e.g. `/api/v1/auth/register`) except
-`GET /health`, and every route except the four `auth` routes requires
-`Authorization: Bearer <accessToken>`. Every `list` row below is paginated —
+`GET /health`, and every route except `register`, `login` and `refresh` requires
+`Authorization: Bearer <accessToken>`. Writes need a `coach` or `admin` role (see
+"Roles and permissions"). Every `list` row below is paginated —
 `?page=&limit=` query params, `{ data, meta }` response — see "Pagination"
 above.
 
@@ -411,6 +453,7 @@ above.
 | Auth | `POST /auth/login` | `{ email, password }` → `200` |
 | Auth | `POST /auth/refresh` | `{ refreshToken }` → `200`, rotates the refresh token |
 | Auth | `GET /auth/me` | → `200 { user }` |
+| Users | `GET/POST /users`, `GET/PATCH/DELETE /users/:id` | admin only; see "Roles and permissions" |
 | Activity levels | `GET /activity-levels` | list (paginated) |
 | Activity levels | `GET /activity-levels/:id` | |
 | Activity levels | `POST /activity-levels` | |
