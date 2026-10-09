@@ -13,7 +13,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
-    "user:promote": "tsx scripts/promote-user.ts",
+    "user:promote": "tsx src/cli/promoteUser.ts",
     "pretest": "tsx scripts/prepare-test-db.ts",
     "test": "node --import tsx --import ./tests/setup.ts --test --test-concurrency=1 tests/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
@@ -33,14 +33,17 @@
     "fastify": "^5.12.5",
     "fastify-plugin": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
+    "prisma": "^5.19.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.14.15",
-    "prisma": "^5.19.1",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
