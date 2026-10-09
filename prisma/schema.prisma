@@ -35,7 +35,32 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  dietPlans DietPlan[]
+
   @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Saved diet plans
+// ---------------------------------------------------------------------------
+
+// A generated plan a user chose to keep. `result` is a snapshot, so later
+// edits to meals/recipes don't silently rewrite a plan someone already follows.
+model DietPlan {
+  id        String   @id @default(uuid())
+  name      String
+  // The questionnaire answers the plan was generated from.
+  input     Json
+  // { macros, macrosDistribution, mealFramework, userAnswers, errors }
+  result    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("diet_plans")
 }
 
 // ---------------------------------------------------------------------------

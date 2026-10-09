@@ -426,6 +426,26 @@ TDEE (`BMR * ActivityLevel.multiplier`) → adjusted calories
 `Goal.macroRatios` percentages (`protein_g = adjustedCalories * protein% / 4`,
 `carbs_g = adjustedCalories * carbs% / 4`, `fat_g = adjustedCalories * fats% / 9`).
 
+### Saved diet plans — `/diet-plans`
+
+A signed-in user (any role) can keep the plans they generate. Each user only
+ever sees their own; someone else's plan is a `404`.
+
+- `POST /diet-plans` — same body as `submit-answer` plus an optional `name`
+  (defaults to `Diet plan YYYY-MM-DD`). The plan is **recalculated on the
+  server** and stored as a snapshot, so later edits to meals/recipes don't
+  change a plan someone is already following. → `201 { data: { id, name,
+  input, result, createdAt, updatedAt } }`. At most 50 saved plans per user
+  (`409` beyond that).
+- `GET /diet-plans?page=&limit=` — your plans, newest first, as summaries
+  `{ id, name, macros, createdAt }`.
+- `GET /diet-plans/:id` — the full plan (`result` has the same shape as the
+  `submit-answer` response).
+- `PATCH /diet-plans/:id` `{ name }` — rename.
+- `DELETE /diet-plans/:id`.
+
+Plans are deleted together with their user.
+
 ### How the weekly plan is generated
 
 Implemented in `src/modules/questions/mealPlan.service.ts` (a pure function,
@@ -465,6 +485,7 @@ above.
 | Auth | `POST /auth/login` | `{ email, password }` → `200` |
 | Auth | `POST /auth/refresh` | `{ refreshToken }` → `200`, rotates the refresh token |
 | Auth | `GET /auth/me` | → `200 { user }` |
+| Diet plans | `GET/POST /diet-plans`, `GET/PATCH/DELETE /diet-plans/:id` | own plans only, any role; see "Saved diet plans" |
 | Users | `GET/POST /users`, `GET/PATCH/DELETE /users/:id` | admin only; see "Roles and permissions" |
 | Activity levels | `GET /activity-levels` | list (paginated) |
 | Activity levels | `GET /activity-levels/:id` | |
